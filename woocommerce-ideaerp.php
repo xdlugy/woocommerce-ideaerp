@@ -18,12 +18,16 @@
 
 defined( 'ABSPATH' ) || exit;
 
-// Plugin constants
+// Plugin constants.
 define( 'WIDEAERP_VERSION',     '1.0.0' );
 define( 'WIDEAERP_PLUGIN_FILE', __FILE__ );
 define( 'WIDEAERP_PLUGIN_DIR',  plugin_dir_path( __FILE__ ) );
 define( 'WIDEAERP_PLUGIN_URL',  plugin_dir_url( __FILE__ ) );
 define( 'WIDEAERP_PLUGIN_BASE', plugin_basename( __FILE__ ) );
+
+// Register PSR-4 autoloader.
+require_once WIDEAERP_PLUGIN_DIR . 'src/Autoloader.php';
+( new \WooIdeaERP\Autoloader( WIDEAERP_PLUGIN_DIR . 'src' ) )->register();
 
 /**
  * Check that WooCommerce is active before doing anything else.
@@ -52,7 +56,7 @@ function wideaerp_missing_woocommerce_notice(): void {
 }
 
 /**
- * Main plugin class — singleton.
+ * Main plugin bootstrap — singleton.
  */
 final class WooCommerce_IdeaERP {
 
@@ -66,18 +70,22 @@ final class WooCommerce_IdeaERP {
 	}
 
 	private function __construct() {
-		$this->define_hooks();
+		$this->boot();
 	}
 
-	/** Clone and unserialize are blocked for the singleton. */
 	public function __clone() {}
 	public function __wakeup() {}
 
-	private function define_hooks(): void {
-		add_action( 'init',                  [ $this, 'load_textdomain' ] );
-		add_action( 'admin_menu',            [ $this, 'register_admin_menu' ] );
-		add_action( 'admin_init',            [ $this, 'register_settings' ] );
-		add_filter( 'plugin_action_links_' . WIDEAERP_PLUGIN_BASE, [ $this, 'add_action_links' ] );
+	private function boot(): void {
+		add_action( 'init', [ $this, 'load_textdomain' ] );
+
+		// Admin pages & settings.
+		$settings_page = new \WooIdeaERP\Admin\SettingsPage();
+		$settings_page->register_hooks();
+
+		// AJAX handlers for the product import tab.
+		$import_page = new \WooIdeaERP\Admin\ProductImportPage();
+		$import_page->register_hooks();
 	}
 
 	public function load_textdomain(): void {
@@ -86,89 +94,6 @@ final class WooCommerce_IdeaERP {
 			false,
 			dirname( WIDEAERP_PLUGIN_BASE ) . '/languages'
 		);
-	}
-
-	public function register_admin_menu(): void {
-		add_options_page(
-			__( 'IdeaERP Integration', 'woocommerce-ideaerp' ),
-			__( 'IdeaERP', 'woocommerce-ideaerp' ),
-			'manage_options',
-			'woocommerce-ideaerp',
-			[ $this, 'render_settings_page' ]
-		);
-	}
-
-	public function register_settings(): void {
-		register_setting( 'wideaerp_settings_group', 'wideaerp_erp_url',   [ 'sanitize_callback' => 'esc_url_raw' ] );
-		register_setting( 'wideaerp_settings_group', 'wideaerp_api_token', [ 'sanitize_callback' => 'sanitize_text_field' ] );
-
-		add_settings_section(
-			'wideaerp_api_section',
-			__( 'IdeaERP API Connection', 'woocommerce-ideaerp' ),
-			null,
-			'woocommerce-ideaerp'
-		);
-
-		add_settings_field(
-			'wideaerp_erp_url',
-			__( 'ERP Environment URL', 'woocommerce-ideaerp' ),
-			[ $this, 'render_field_erp_url' ],
-			'woocommerce-ideaerp',
-			'wideaerp_api_section'
-		);
-
-		add_settings_field(
-			'wideaerp_api_token',
-			__( 'API Token', 'woocommerce-ideaerp' ),
-			[ $this, 'render_field_api_token' ],
-			'woocommerce-ideaerp',
-			'wideaerp_api_section'
-		);
-	}
-
-	public function render_field_erp_url(): void {
-		$value = get_option( 'wideaerp_erp_url', '' );
-		printf(
-			'<input type="url" id="wideaerp_erp_url" name="wideaerp_erp_url" value="%s" class="regular-text" placeholder="https://erp.example.com" />',
-			esc_attr( $value )
-		);
-	}
-
-	public function render_field_api_token(): void {
-		$value = get_option( 'wideaerp_api_token', '' );
-		printf(
-			'<input type="password" id="wideaerp_api_token" name="wideaerp_api_token" value="%s" class="regular-text" autocomplete="new-password" />',
-			esc_attr( $value )
-		);
-	}
-
-	public function render_settings_page(): void {
-		if ( ! current_user_can( 'manage_options' ) ) {
-			return;
-		}
-		?>
-		<div class="wrap">
-			<h1><?php esc_html_e( 'WooCommerce IdeaERP Integration', 'woocommerce-ideaerp' ); ?></h1>
-			<form method="post" action="options.php">
-				<?php
-				settings_fields( 'wideaerp_settings_group' );
-				do_settings_sections( 'woocommerce-ideaerp' );
-				submit_button( __( 'Save Settings', 'woocommerce-ideaerp' ) );
-				?>
-			</form>
-		</div>
-		<?php
-	}
-
-	/** Add a "Settings" link on the Plugins list page. */
-	public function add_action_links( array $links ): array {
-		$settings_link = sprintf(
-			'<a href="%s">%s</a>',
-			esc_url( admin_url( 'options-general.php?page=woocommerce-ideaerp' ) ),
-			esc_html__( 'Settings', 'woocommerce-ideaerp' )
-		);
-		array_unshift( $links, $settings_link );
-		return $links;
 	}
 }
 
@@ -186,7 +111,7 @@ function wideaerp_init(): void {
 add_action( 'plugins_loaded', 'wideaerp_init' );
 
 /**
- * Activation hook — create any required DB tables or default options.
+ * Activation hook.
  */
 function wideaerp_activate(): void {
 	if ( ! wideaerp_check_dependencies() ) {
