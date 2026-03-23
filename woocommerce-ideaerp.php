@@ -86,6 +86,10 @@ final class WooCommerce_IdeaERP {
 		// AJAX handlers for the product import tab.
 		$import_page = new \WooIdeaERP\Admin\ProductImportPage();
 		$import_page->register_hooks();
+
+		// Step 2: export WooCommerce orders to IdeaERP.
+		$order_exporter = new \WooIdeaERP\Sync\OrderExporter();
+		$order_exporter->register_hooks();
 	}
 
 	public function load_textdomain(): void {
