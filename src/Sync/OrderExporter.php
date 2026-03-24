@@ -112,7 +112,7 @@ class OrderExporter {
 			'date_order'       => $order->get_date_created() ? $order->get_date_created()->date( 'Y-m-d H:i:s' ) : null,
 			'is_paid'          => $order->is_paid(),
 			'amount_paid'      => (float) $order->get_total(),
-			'delivery_price'   => (float) $order->get_shipping_total(),
+			'delivery_price'   => (float) $order->get_shipping_total() + (float) $order->get_shipping_tax(),
 			'integration_id'   => (string) $order->get_id(),
 			'integration_type' => 'woocommerce',
 			'integration_email'=> $order->get_billing_email(),
@@ -311,10 +311,10 @@ class OrderExporter {
 
 		foreach ( $order->get_items() as $item ) {
 			/** @var \WC_Order_Item_Product $item */
-			$product    = $item->get_product();
-			$erp_id     = null;
-			$erp_sku    = null;
-			$erp_ean    = null;
+			$product = $item->get_product();
+			$erp_id  = null;
+			$erp_sku = null;
+			$erp_ean = null;
 
 			if ( $product instanceof \WC_Product ) {
 				$erp_id  = (int) $product->get_meta( '_erp_product_id' );
@@ -326,13 +326,34 @@ class OrderExporter {
 				? [ 'id' => $erp_id, 'name' => null ]
 				: [ 'id' => null, 'name' => $item->get_name() ];
 
-			$tax_rate = $this->get_item_tax_rate( $item, $order );
+			$qty = (float) $item->get_quantity();
+
+			// WC stores line totals as net (excl. tax). Add tax back to get the
+			// gross amount and send price_include: true so IdeaERP stores the
+			// same gross price the customer saw.
+			$total_net   = (float) $item->get_total();
+			$total_tax   = (float) $item->get_total_tax();
+			$total_gross = $total_net + $total_tax;
+			$price_unit  = $total_gross / max( 1.0, $qty );
+
+			$subtotal_net   = (float) $item->get_subtotal();
+			$subtotal_tax   = (float) $item->get_subtotal_tax();
+			$subtotal_gross = $subtotal_net + $subtotal_tax;
+
+			// Express any coupon discount as a percentage of the pre-discount gross price.
+			$discount = 0.0;
+			if ( $subtotal_gross > 0 && $total_gross < $subtotal_gross ) {
+				$discount = round( ( ( $subtotal_gross - $total_gross ) / $subtotal_gross ) * 100, 2 );
+			}
+
+			$tax_rate = $this->get_item_tax_rate( $item );
 
 			$line = [
 				'product'         => $product_field,
 				'name'            => $item->get_name(),
-				'product_uom_qty' => (float) $item->get_quantity(),
-				'price_unit'      => (float) ( $item->get_subtotal() / max( 1, $item->get_quantity() ) ),
+				'product_uom_qty' => $qty,
+				'price_unit'      => round( $price_unit, 4 ),
+				'discount'        => $discount,
 				'tax'             => [ 'amount' => $tax_rate, 'price_include' => true ],
 				'integration_id'  => (string) $item->get_id(),
 			];
@@ -353,23 +374,33 @@ class OrderExporter {
 
 	/**
 	 * Derive the effective tax rate (%) for a line item.
-	 * Returns 0.0 when no tax data is available.
+	 *
+	 * Uses the post-discount total and its tax so the rate is consistent with
+	 * the price_unit sent to IdeaERP. Falls back to the pre-discount subtotal
+	 * when the total is zero (e.g. 100 % coupon). Returns 0.0 when no tax data
+	 * is available.
 	 */
-	private function get_item_tax_rate( \WC_Order_Item_Product $item, \WC_Order $order ): float {
+	private function get_item_tax_rate( \WC_Order_Item_Product $item ): float {
 		$taxes = $item->get_taxes();
 
-		if ( empty( $taxes['subtotal'] ) ) {
+		if ( empty( $taxes['total'] ) && empty( $taxes['subtotal'] ) ) {
 			return 0.0;
 		}
 
-		$subtotal     = (float) $item->get_subtotal();
-		$subtotal_tax = (float) $item->get_subtotal_tax();
+		$net = (float) $item->get_total();
+		$tax = (float) $item->get_total_tax();
 
-		if ( $subtotal <= 0 ) {
+		// Fall back to pre-discount figures when total is zero.
+		if ( $net <= 0 ) {
+			$net = (float) $item->get_subtotal();
+			$tax = (float) $item->get_subtotal_tax();
+		}
+
+		if ( $net <= 0 ) {
 			return 0.0;
 		}
 
-		return round( ( $subtotal_tax / $subtotal ) * 100, 2 );
+		return round( ( $tax / $net ) * 100, 2 );
 	}
 
 	/**
