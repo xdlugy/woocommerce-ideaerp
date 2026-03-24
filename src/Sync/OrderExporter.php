@@ -5,6 +5,7 @@ namespace WooIdeaERP\Sync;
 use WooIdeaERP\Api\Client;
 use WooIdeaERP\Api\Endpoints\OrdersEndpoint;
 use WooIdeaERP\Helpers\Logger;
+use WooIdeaERP\Sync\InvoiceImporter;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -69,6 +70,10 @@ class OrderExporter {
 			$erp      = $endpoint->create( $payload );
 
 			$order->update_meta_data( self::META_ERP_ORDER_ID, $erp->id );
+
+			// Flag this order so InvoiceImporter knows to poll for its invoice.
+			$order->update_meta_data( InvoiceImporter::META_INVOICE_PENDING, '1' );
+
 			$order->save_meta_data();
 
 			$order->add_order_note(

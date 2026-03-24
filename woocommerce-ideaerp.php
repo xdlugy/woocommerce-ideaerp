@@ -90,6 +90,10 @@ final class WooCommerce_IdeaERP {
 		// Step 2: export WooCommerce orders to IdeaERP.
 		$order_exporter = new \WooIdeaERP\Sync\OrderExporter();
 		$order_exporter->register_hooks();
+
+		// Step 3: download invoices from IdeaERP into WooCommerce orders.
+		$invoice_importer = new \WooIdeaERP\Sync\InvoiceImporter();
+		$invoice_importer->register_hooks();
 	}
 
 	public function load_textdomain(): void {
