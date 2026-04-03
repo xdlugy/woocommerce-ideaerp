@@ -914,7 +914,8 @@ class ProductImporter {
 	}
 
 	/**
-	 * Set the variation featured image from ERP URLs (first image only).
+	 * Sideload all variation images, set the first as the variation featured image,
+	 * and store all IDs in _variation_gallery_ids for frontend gallery swapping.
 	 *
 	 * @param string[] $image_urls
 	 */
@@ -924,8 +925,15 @@ class ProductImporter {
 			return;
 		}
 
-		$attachment_id = $this->get_or_sideload_attachment( $variation_id, $image_urls[0] );
-		if ( ! $attachment_id ) {
+		$all_ids = [];
+		foreach ( $image_urls as $url ) {
+			$id = $this->get_or_sideload_attachment( $variation_id, $url );
+			if ( $id ) {
+				$all_ids[] = $id;
+			}
+		}
+
+		if ( empty( $all_ids ) ) {
 			return;
 		}
 
@@ -934,13 +942,16 @@ class ProductImporter {
 			return;
 		}
 
-		$variation->set_image_id( $attachment_id );
+		$variation->set_image_id( $all_ids[0] );
 		$variation->save();
 
+		update_post_meta( $variation_id, '_variation_gallery_ids', implode( ',', $all_ids ) );
+
 		Logger::debug( sprintf(
-			'handle_variation_images: variation #%d image set to attachment #%d',
+			'handle_variation_images: variation #%d — %d image(s) stored (featured: #%d)',
 			$variation_id,
-			$attachment_id
+			count( $all_ids ),
+			$all_ids[0]
 		) );
 	}
 

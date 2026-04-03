@@ -94,6 +94,9 @@ final class WooCommerce_IdeaERP {
 		// Step 3: download invoices from IdeaERP into WooCommerce orders.
 		$invoice_importer = new \WooIdeaERP\Sync\InvoiceImporter();
 		$invoice_importer->register_hooks();
+
+		// Frontend: swap gallery images when a variation is selected.
+		( new \WooIdeaERP\Frontend\VariationGallery() )->register();
 	}
 
 	public function load_textdomain(): void {
