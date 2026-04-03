@@ -98,8 +98,15 @@ class ProductImporter {
 				$wc_product->get_id()
 			) );
 
-			// Use the first variant's data for the parent product fields.
-			$wc_product->set_name( $representative->name );
+			// Parent title: strip width/colour tail so the variable product reads
+			// e.g. "COMO Ława" not "COMO Ława 75 dąb artisan".
+			$parent_name = $this->variable_product_base_name( $representative->name );
+			$wc_product->set_name( $parent_name );
+			Logger::debug( sprintf(
+				'import_variable_from_variants: parent name "%s" (from variant name "%s")',
+				$parent_name,
+				$representative->name
+			) );
 			$wc_product->set_status( 'publish' );
 			$wc_product->set_catalog_visibility( 'visible' );
 			$wc_product->set_weight( (string) $representative->weight );
@@ -329,6 +336,14 @@ class ProductImporter {
 			$variant_attr_map[ $attr->name ] = $attr->values[0] ?? '';
 		}
 
+		// When the ERP returns no attributes, fall back to parsing the name.
+		if ( empty( $variant_attr_map ) ) {
+			$parsed = $this->parse_attributes_from_name( $variant->name );
+			foreach ( $parsed as $attr_name => $values ) {
+				$variant_attr_map[ $attr_name ] = $values[0] ?? '';
+			}
+		}
+
 		Logger::debug( sprintf(
 			'sync_single_variation: erp_id=%d raw attribute map from ERP: %s',
 			$variant->id,
@@ -397,9 +412,22 @@ class ProductImporter {
 	private function collect_attribute_options( array $variants ): array {
 		$options = [];
 		foreach ( $variants as $variant ) {
+			$contributed = false;
 			foreach ( $variant->attributes as $attr ) {
 				foreach ( $attr->values as $value ) {
 					$options[ $attr->name ][] = $value;
+					$contributed = true;
+				}
+			}
+
+			// When the ERP returns no attribute values for this variant, fall back
+			// to parsing Szerokość and Kolor from the product name.
+			if ( ! $contributed ) {
+				$parsed = $this->parse_attributes_from_name( $variant->name );
+				foreach ( $parsed as $attr_name => $values ) {
+					foreach ( $values as $value ) {
+						$options[ $attr_name ][] = $value;
+					}
 				}
 			}
 		}
@@ -408,6 +436,101 @@ class ProductImporter {
 			$options[ $name ] = array_values( array_unique( $values ) );
 		}
 		return $options;
+	}
+
+	/**
+	 * Shorten an ERP variant name for the WooCommerce variable parent title.
+	 * Drops the trailing " <width> <colour...>" chunk, or only the colour tail
+	 * when there is no space-delimited width.
+	 *
+	 * Examples:
+	 *  "COMO Ława 75 dąb artisan" → "COMO Ława"
+	 *  "FLOW Słupek 136 biały"    → "FLOW Słupek"
+	 */
+	private function variable_product_base_name( string $name ): string {
+		$name = trim( $name );
+		if ( $name === '' ) {
+			return $name;
+		}
+
+		// Last " <digits> <rest…>" where digits are space-delimited (avoids matching inside K154).
+		if ( preg_match( '/^(.*)\s(\d+)\s+.+$/us', $name, $m ) ) {
+			$base = trim( $m[1] );
+			if ( $base !== '' ) {
+				return $base;
+			}
+		}
+
+		// No width segment — drop title-case prefix vs colour tail (same idea as parse fallback).
+		if ( preg_match( '/^((?:[A-ZŁŚŻŹĆĄĘÓŃ][^\s]*\s+)+)(.+)$/u', $name, $m ) ) {
+			$base = trim( $m[1] );
+			$tail = trim( $m[2] );
+			if ( $base !== '' && $tail !== '' ) {
+				return $base;
+			}
+		}
+
+		return $name;
+	}
+
+	/**
+	 * Parse Szerokość and Kolor attributes from a product name when the ERP
+	 * returns no attributes for the product.
+	 *
+	 * Rules:
+	 *  - The last standalone integer in the name becomes Szerokość.
+	 *  - Everything after that integer (trimmed) becomes Kolor.
+	 *  - If no integer is found, the text after the last title-case/all-caps
+	 *    word sequence is used as Kolor only.
+	 *
+	 * Examples:
+	 *  "TREND Szafka 60 czarny"          → Szerokość=60,  Kolor=czarny
+	 *  "Blat 100 dąb craft złoty"         → Szerokość=100, Kolor=dąb craft złoty
+	 *  "FLOW/MODERN Szafka 60 2D czarny"  → Szerokość=60,  Kolor=czarny  (last int)
+	 *  "DIAMOND Komoda K154 dąb evoke"    → Kolor=dąb evoke  (K154 not standalone)
+	 *
+	 * @return array<string, string[]>  attribute_name => [value]
+	 */
+	private function parse_attributes_from_name( string $name ): array {
+		// Match the last standalone integer followed by at least one colour word.
+		// \b(\d+)\b ensures we don't match numbers glued to letters (e.g. K154, 2D).
+		if ( preg_match( '/\b(\d+)\b\s+(.+)$/u', $name, $m ) ) {
+			$width  = trim( $m[1] );
+			$colour = trim( $m[2] );
+			if ( $colour !== '' ) {
+				Logger::debug( sprintf(
+					'parse_attributes_from_name: "%s" → Szerokość=%s, Kolor=%s',
+					$name,
+					$width,
+					$colour
+				) );
+				return [
+					'Szerokość' => [ $width ],
+					'Kolor'     => [ $colour ],
+				];
+			}
+		}
+
+		// No integer found — extract colour from the tail of the name.
+		// Skip leading all-caps / title-case word groups (brand/model tokens)
+		// and treat the remaining lowercase-starting text as the colour.
+		if ( preg_match( '/(?:[A-ZŁŚŻŹĆĄĘÓŃ][^\s]*\s+)+(.+)$/u', $name, $m ) ) {
+			$colour = trim( $m[1] );
+			if ( $colour !== '' ) {
+				Logger::debug( sprintf(
+					'parse_attributes_from_name: "%s" → Kolor=%s (no width)',
+					$name,
+					$colour
+				) );
+				return [ 'Kolor' => [ $colour ] ];
+			}
+		}
+
+		Logger::debug( sprintf(
+			'parse_attributes_from_name: "%s" → no attributes extracted',
+			$name
+		) );
+		return [];
 	}
 
 	/**
