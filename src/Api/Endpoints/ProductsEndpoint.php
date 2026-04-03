@@ -69,6 +69,19 @@ class ProductsEndpoint {
 	}
 
 	/**
+	 * Read `barcode` from GET /v2/products?id=… (same field as in OpenAPI Product).
+	 */
+	public function fetch_barcode_by_id( int $id ): string {
+		$data     = $this->client->get( self::PATH, [ 'id' => $id ] );
+		$products = $data['products'] ?? [];
+		if ( empty( $products ) || ! is_array( $products[0] ) ) {
+			return '';
+		}
+
+		return ErpProduct::extract_barcode_from_api_row( $products[0] );
+	}
+
+	/**
 	 * Fetch a single product by SKU (default_code).
 	 */
 	public function get_by_sku( string $sku ): ?ErpProduct {

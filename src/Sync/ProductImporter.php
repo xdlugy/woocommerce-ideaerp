@@ -107,27 +107,11 @@ class ProductImporter {
 				$parent_name,
 				$representative->name
 			) );
-			$wc_product->set_status( 'publish' );
+			$wc_product->set_status( 'draft' );
 			$wc_product->set_catalog_visibility( 'visible' );
 			$wc_product->set_weight( (string) $representative->weight );
 
-			// Derive a shared SKU from the longest common prefix of all variant SKUs.
-			$skus        = array_map( fn( ErpProduct $v ) => $v->default_code, $variants );
-			$parent_sku  = $this->common_sku_prefix( $skus );
-			$wc_product->set_sku( $parent_sku );
-
-			Logger::debug( sprintf(
-				'import_variable_from_variants: derived parent SKU "%s" from variants: %s',
-				$parent_sku,
-				implode( ', ', $skus )
-			) );
-
-			if ( ! empty( $representative->description ) ) {
-				$wc_product->set_description( wp_kses_post( $representative->description ) );
-			}
-			if ( ! empty( $representative->description_sale ) ) {
-				$wc_product->set_short_description( wp_kses_post( $representative->description_sale ) );
-			}
+			$this->apply_description_fields( $wc_product, $representative );
 
 			// Collect all unique attribute name→values across all variants
 			// so the parent product declares the full set of options.
@@ -202,6 +186,10 @@ class ProductImporter {
 				$saved_id
 			) );
 
+			// Parent SKU: not in the ERP API — always assign a WooCommerce-generated parent SKU when empty or legacy-prefixed.
+			// Variations use ERP default_code; the variable parent never clears its SKU on re-import.
+			$this->maybe_apply_wc_default_parent_sku( $wc_product, $saved_id );
+
 			// Store template ID so we can find this parent later.
 			update_post_meta( $saved_id, self::ERP_TMPL_ID_META, $tmpl_id );
 
@@ -266,8 +254,10 @@ class ProductImporter {
 		$wc_product->set_stock_status( $erp->available_qty() > 0 ? 'instock' : 'outofstock' );
 
 		$saved_id = $wc_product->save();
+		$this->assign_sku_after_save( $wc_product, $saved_id, $erp->default_code );
 
 		update_post_meta( $saved_id, self::ERP_ID_META, $erp->id );
+		$this->persist_global_unique_id_meta( $saved_id, $this->resolve_barcode( $erp ) );
 
 		// The list endpoint returns images:[] — fetch the full data by ID.
 		$images = $this->products_endpoint->get_images_by_id( $erp->id );
@@ -307,7 +297,7 @@ class ProductImporter {
 	): void {
 		// Find existing variation by ERP product ID meta or by SKU.
 		$variation_id = $this->find_variation_by_erp_id( $variant->id );
-		if ( ! $variation_id ) {
+		if ( ! $variation_id && trim( (string) $variant->default_code ) !== '' ) {
 			$variation_id = wc_get_product_id_by_sku( $variant->default_code ) ?: null;
 		}
 
@@ -323,12 +313,13 @@ class ProductImporter {
 			: new \WC_Product_Variation();
 
 		$variation->set_parent_id( $parent_id );
-		$variation->set_sku( $variant->default_code );
 		$variation->set_regular_price( (string) $variant->list_price );
 		$variation->set_manage_stock( true );
 		$variation->set_stock_quantity( $variant->available_qty() );
 		$variation->set_stock_status( $variant->available_qty() > 0 ? 'instock' : 'outofstock' );
 		$variation->set_weight( (string) $variant->weight );
+
+		$this->apply_description_fields( $variation, $variant );
 
 		// Build a map of attribute_name => value for this specific variant.
 		$variant_attr_map = [];
@@ -385,22 +376,31 @@ class ProductImporter {
 
 		$variation->set_attributes( $attributes );
 
-		// EAN / barcode for this specific variant.
-		if ( ! empty( $variant->barcode ) ) {
-			$variation->update_meta_data( '_global_unique_id', $variant->barcode );
-		}
+		$barcode = $this->resolve_barcode( $variant );
+		$this->apply_global_unique_id( $variation, $barcode );
 
 		$saved_id = $variation->save();
+
+		$this->assign_sku_after_save( $variation, $saved_id, $variant->default_code );
 
 		Logger::debug( sprintf(
 			'sync_single_variation: erp_id=%d saved as WC variation #%d under parent #%d (EAN=%s)',
 			$variant->id,
 			$saved_id,
 			$parent_id,
-			$variant->barcode ?? 'none'
+			$barcode !== '' ? $barcode : 'none'
 		) );
 
 		update_post_meta( $saved_id, self::ERP_ID_META, $variant->id );
+		$this->persist_global_unique_id_meta( $saved_id, $barcode );
+
+		$var_images = $this->products_endpoint->get_images_by_id( $variant->id );
+		Logger::debug( sprintf(
+			'sync_single_variation: fetched %d image(s) for variation erp_id=%d',
+			count( $var_images ),
+			$variant->id
+		) );
+		$this->handle_variation_images( $saved_id, $var_images );
 	}
 
 	/**
@@ -642,62 +642,158 @@ class ProductImporter {
 	// -------------------------------------------------------------------------
 
 	/**
-	 * Find the longest common prefix shared by all SKUs in the array,
-	 * then strip any trailing whitespace or common separators (space, dash, underscore, dot).
-	 *
-	 * Examples:
-	 *   ["JT-001 S", "JT-001 M", "JT-001 L"]  => "JT-001"
-	 *   ["BS-1001 czarny S", "BS-1001 biały M"] => "BS-1001"
-	 *   ["SKU220 1kg Czarny", "SKU220 1kg biały"] => "SKU220 1kg"
-	 *
-	 * @param  string[] $skus
+	 * After the product exists in the database: set SKU from ERP default_code when set,
+	 * otherwise use WooCommerce-style numeric id + wc_product_generate_unique_sku().
 	 */
-	private function common_sku_prefix( array $skus ): string {
-		if ( empty( $skus ) ) {
-			return '';
+	private function assign_sku_after_save( \WC_Product $product, int $product_id, string $default_code ): void {
+		$code = trim( (string) $default_code );
+		if ( $code !== '' ) {
+			$sku = function_exists( 'wc_product_generate_unique_sku' )
+				? wc_product_generate_unique_sku( $product_id, $code, 0 )
+				: $code;
+		} else {
+			$base = (string) $product_id;
+			$sku  = function_exists( 'wc_product_generate_unique_sku' )
+				? wc_product_generate_unique_sku( $product_id, $base, 0 )
+				: $base;
 		}
 
-		if ( count( $skus ) === 1 ) {
-			return $skus[0];
+		if ( (string) $product->get_sku( 'edit' ) === $sku ) {
+			return;
 		}
 
-		$first  = $skus[0];
-		$prefix = '';
+		$product->set_sku( $sku );
+		$product->save();
+	}
 
-		for ( $i = 0; $i < strlen( $first ); $i++ ) {
-			$char = $first[ $i ];
-			foreach ( $skus as $sku ) {
-				if ( ! isset( $sku[ $i ] ) || $sku[ $i ] !== $char ) {
-					// Trim trailing separators from whatever we have so far.
-					return rtrim( $prefix, " \t-_." );
-				}
-			}
-			$prefix .= $char;
+	/**
+	 * Set variable parent SKU using WooCommerce ID + uniqueness helper (same idea as programmatic "SKU = product ID").
+	 * Skips when a non-empty SKU is already set (unless it is the legacy ideaerp-tmpl- prefix).
+	 *
+	 * @param \WC_Product_Variable $product  Parent after first save (must have positive ID).
+	 */
+	private function maybe_apply_wc_default_parent_sku( \WC_Product_Variable $product, int $saved_id ): void {
+		$current = trim( (string) $product->get_sku( 'edit' ) );
+		if ( $current !== '' && 0 !== strpos( $current, 'ideaerp-tmpl-' ) ) {
+			return;
 		}
 
-		return rtrim( $prefix, " \t-_." );
+		$base = (string) $saved_id;
+		$sku  = function_exists( 'wc_product_generate_unique_sku' )
+			? wc_product_generate_unique_sku( $saved_id, $base, 0 )
+			: $base;
+
+		if ( $product->get_sku( 'edit' ) === $sku ) {
+			return;
+		}
+
+		$product->set_sku( $sku );
+		$product->save();
 	}
 
 	private function apply_common_data( \WC_Product $wc_product, ErpProduct $erp ): void {
 		$wc_product->set_name( $erp->name );
-		$wc_product->set_sku( $erp->default_code );
 		$wc_product->set_regular_price( (string) $erp->list_price );
 		$wc_product->set_weight( (string) $erp->weight );
-		$wc_product->set_status( 'publish' );
+		$wc_product->set_status( 'draft' );
 		$wc_product->set_catalog_visibility( 'visible' );
 
-		if ( ! empty( $erp->description ) ) {
-			$wc_product->set_description( wp_kses_post( $erp->description ) );
+		$this->apply_description_fields( $wc_product, $erp );
+
+		$this->apply_global_unique_id( $wc_product, $this->resolve_barcode( $erp ) );
+	}
+
+	/**
+	 * Long description: prefer ERP description_sale_html (with API refetch when
+	 * the list payload omits it), else plain description. Short description from
+	 * description_sale. Works for simple, variable parent, and variations.
+	 */
+	private function apply_description_fields( \WC_Product $product, ErpProduct $erp ): void {
+		$html = $this->resolve_description_sale_html( $erp );
+		if ( $html !== '' ) {
+			$product->set_description( wp_kses_post( $html ) );
+		} elseif ( ! empty( $erp->description ) ) {
+			$product->set_description( wp_kses_post( $erp->description ) );
 		}
 
 		if ( ! empty( $erp->description_sale ) ) {
-			$wc_product->set_short_description( wp_kses_post( $erp->description_sale ) );
+			$product->set_short_description( wp_kses_post( $erp->description_sale ) );
+		}
+	}
+
+	private function resolve_description_sale_html( ErpProduct $erp ): string {
+		$html = trim( (string) ( $erp->description_sale_html ?? '' ) );
+		if ( $html !== '' ) {
+			return $html;
 		}
 
-		// EAN / barcode stored in the WooCommerce global unique ID field.
-		if ( ! empty( $erp->barcode ) ) {
-			$wc_product->update_meta_data( '_global_unique_id', $erp->barcode );
+		$fresh = $this->products_endpoint->get_by_id( $erp->id );
+		if ( $fresh ) {
+			$html = trim( (string) ( $fresh->description_sale_html ?? '' ) );
 		}
+
+		return $html;
+	}
+
+	/**
+	 * Barcode from the hydrated DTO, or from a single-product API fetch when the
+	 * list endpoint leaves it empty (same pattern as images).
+	 */
+	private function resolve_barcode( ErpProduct $erp ): string {
+		$barcode = trim( (string) ( $erp->barcode ?? '' ) );
+		if ( $barcode !== '' ) {
+			Logger::debug( sprintf( 'resolve_barcode: erp_id=%d from DTO="%s"', $erp->id, $barcode ) );
+			return $barcode;
+		}
+
+		$barcode = $this->products_endpoint->fetch_barcode_by_id( $erp->id );
+		Logger::debug( sprintf(
+			'resolve_barcode: erp_id=%d after GET by id="%s"',
+			$erp->id,
+			$barcode !== '' ? $barcode : '(empty)'
+		) );
+
+		return $barcode;
+	}
+
+	/**
+	 * Persist ERP barcode as WooCommerce GTIN / global unique ID.
+	 *
+	 * Uses post meta only: {@see \WC_Product::set_global_unique_id()} applies strict
+	 * GTIN validation and can clear values that still need to be stored.
+	 */
+	private function apply_global_unique_id( \WC_Product $product, string $barcode ): void {
+		$barcode = trim( $barcode );
+		if ( $barcode === '' ) {
+			return;
+		}
+
+		$product->update_meta_data( '_global_unique_id', $barcode );
+	}
+
+	/**
+	 * Ensure _global_unique_id is written to the database (after saveWC may clear invalid GTIN from props).
+	 */
+	private function persist_global_unique_id_meta( int $post_id, string $barcode ): void {
+		$barcode = trim( $barcode );
+		if ( $barcode === '' ) {
+			return;
+		}
+
+		$product = wc_get_product( $post_id );
+		if ( $product instanceof \WC_Product ) {
+			$product->update_meta_data( '_global_unique_id', $barcode );
+			$product->save_meta_data();
+		}
+
+		// Direct post meta for compatibility (data stores, caches, older WC).
+		update_post_meta( $post_id, '_global_unique_id', $barcode );
+
+		Logger::debug( sprintf(
+			'persist_global_unique_id_meta: post #%d _global_unique_id="%s"',
+			$post_id,
+			$barcode
+		) );
 	}
 
 	/**
@@ -719,9 +815,133 @@ class ProductImporter {
 			return (int) $posts[0];
 		}
 
-		// Fall back to SKU match.
+		// Fall back to SKU match when ERP provides a code.
+		if ( trim( (string) $erp->default_code ) === '' ) {
+			return null;
+		}
 		$id = wc_get_product_id_by_sku( $erp->default_code );
 		return $id ?: null;
+	}
+
+	/**
+	 * Deduplicate image URLs and sort by the last URL path segment (image "name"),
+	 * numerically when it is all digits, otherwise alphabetically.
+	 *
+	 * @param string[] $image_urls
+	 * @return string[]
+	 */
+	private function normalize_image_urls( array $image_urls ): array {
+		$urls = array_values( array_filter( array_map( 'trim', array_map( 'strval', $image_urls ) ) ) );
+		$urls = array_values( array_unique( $urls ) );
+
+		usort(
+			$urls,
+			function ( string $a, string $b ): int {
+				$path_a = wp_parse_url( $a, PHP_URL_PATH );
+				$path_b = wp_parse_url( $b, PHP_URL_PATH );
+				$base_a = is_string( $path_a ) ? basename( rtrim( $path_a, '/' ) ) : $a;
+				$base_b = is_string( $path_b ) ? basename( rtrim( $path_b, '/' ) ) : $b;
+
+				$num_a = ctype_digit( $base_a ) ? (int) $base_a : null;
+				$num_b = ctype_digit( $base_b ) ? (int) $base_b : null;
+
+				if ( $num_a !== null && $num_b !== null ) {
+					$cmp = $num_a <=> $num_b;
+					if ( $cmp !== 0 ) {
+						return $cmp;
+					}
+				} elseif ( $num_a !== null ) {
+					return -1;
+				} elseif ( $num_b !== null ) {
+					return 1;
+				} else {
+					$cmp = strcmp( $base_a, $base_b );
+					if ( $cmp !== 0 ) {
+						return $cmp;
+					}
+				}
+
+				return strcmp( $a, $b );
+			}
+		);
+
+		return $urls;
+	}
+
+	/**
+	 * Return an existing attachment ID for this ERP image URL, or sideload it
+	 * as a child of $post_id (product or variation).
+	 */
+	private function get_or_sideload_attachment( int $post_id, string $url ): ?int {
+		if ( $url === '' ) {
+			return null;
+		}
+
+		require_once ABSPATH . 'wp-admin/includes/media.php';
+		require_once ABSPATH . 'wp-admin/includes/file.php';
+		require_once ABSPATH . 'wp-admin/includes/image.php';
+
+		$existing = $this->find_attachment_by_source_url( $url );
+		if ( $existing ) {
+			return $existing;
+		}
+
+		$url_path     = wp_parse_url( $url, PHP_URL_PATH ) ?? '';
+		$download_url = ( '' === pathinfo( $url_path, PATHINFO_EXTENSION ) )
+			? rtrim( $url, '/' ) . '.webp'
+			: $url;
+
+		Logger::debug( sprintf(
+			'get_or_sideload_attachment: sideloading "%s" for post #%d',
+			$download_url,
+			$post_id
+		) );
+
+		$attachment_id = media_sideload_image( $download_url, $post_id, null, 'id' );
+
+		if ( is_wp_error( $attachment_id ) ) {
+			Logger::warning( sprintf(
+				'ProductImporter: could not sideload image "%s" for post #%d: %s',
+				$url,
+				$post_id,
+				$attachment_id->get_error_message()
+			) );
+			return null;
+		}
+
+		update_post_meta( $attachment_id, '_wideaerp_source_url', $url );
+		return (int) $attachment_id;
+	}
+
+	/**
+	 * Set the variation featured image from ERP URLs (first image only).
+	 *
+	 * @param string[] $image_urls
+	 */
+	private function handle_variation_images( int $variation_id, array $image_urls ): void {
+		$image_urls = $this->normalize_image_urls( $image_urls );
+		if ( empty( $image_urls ) ) {
+			return;
+		}
+
+		$attachment_id = $this->get_or_sideload_attachment( $variation_id, $image_urls[0] );
+		if ( ! $attachment_id ) {
+			return;
+		}
+
+		$variation = wc_get_product( $variation_id );
+		if ( ! $variation instanceof \WC_Product_Variation ) {
+			return;
+		}
+
+		$variation->set_image_id( $attachment_id );
+		$variation->save();
+
+		Logger::debug( sprintf(
+			'handle_variation_images: variation #%d image set to attachment #%d',
+			$variation_id,
+			$attachment_id
+		) );
 	}
 
 	/**
@@ -730,59 +950,18 @@ class ProductImporter {
 	 * @param string[] $image_urls
 	 */
 	private function handle_images( int $post_id, array $image_urls ): void {
+		$image_urls = $this->normalize_image_urls( $image_urls );
 		if ( empty( $image_urls ) ) {
 			return;
 		}
 
-		require_once ABSPATH . 'wp-admin/includes/media.php';
-		require_once ABSPATH . 'wp-admin/includes/file.php';
-		require_once ABSPATH . 'wp-admin/includes/image.php';
-
 		$gallery_ids = [];
 
 		foreach ( $image_urls as $index => $url ) {
-			if ( empty( $url ) ) {
+			$attachment_id = $this->get_or_sideload_attachment( $post_id, $url );
+			if ( ! $attachment_id ) {
 				continue;
 			}
-
-			// Skip if already attached (check by source URL meta).
-			$existing = $this->find_attachment_by_source_url( $url );
-			if ( $existing ) {
-				if ( $index === 0 ) {
-					set_post_thumbnail( $post_id, $existing );
-				} else {
-					$gallery_ids[] = $existing;
-				}
-				continue;
-			}
-
-			// ERP image URLs like /product/images/8 have no extension.
-			// media_sideload_image() requires a recognisable extension to detect
-			// the MIME type, so append .webp when the path has no extension.
-			$url_path     = wp_parse_url( $url, PHP_URL_PATH ) ?? '';
-			$download_url = ( '' === pathinfo( $url_path, PATHINFO_EXTENSION ) )
-				? rtrim( $url, '/' ) . '.webp'
-				: $url;
-
-			Logger::debug( sprintf(
-				'handle_images: sideloading "%s" for post #%d',
-				$download_url,
-				$post_id
-			) );
-
-			$attachment_id = media_sideload_image( $download_url, $post_id, null, 'id' );
-
-			if ( is_wp_error( $attachment_id ) ) {
-				Logger::warning( sprintf(
-					'ProductImporter: could not sideload image "%s" for post #%d: %s',
-					$url,
-					$post_id,
-					$attachment_id->get_error_message()
-				) );
-				continue;
-			}
-
-			update_post_meta( $attachment_id, '_wideaerp_source_url', $url );
 
 			if ( $index === 0 ) {
 				set_post_thumbnail( $post_id, $attachment_id );
