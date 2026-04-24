@@ -16,7 +16,7 @@ class VariationGallery {
 	}
 
 	/**
-	 * Append variation_gallery_images to the variation data array that WC
+	 * Append custom_variation_gallery to the variation data array that WC
 	 * serialises as JSON and passes to the frontend JS.
 	 *
 	 * @param array                  $data      Variation data array.
@@ -34,22 +34,29 @@ class VariationGallery {
 		$images = [];
 
 		foreach ( $ids as $id ) {
-			$full  = wp_get_attachment_image_src( $id, 'woocommerce_single' );
-			$thumb = wp_get_attachment_image_src( $id, 'woocommerce_thumbnail' );
+			$full        = wp_get_attachment_image_src( $id, 'full' );
+			$single      = wp_get_attachment_image_src( $id, 'woocommerce_single' );
+			$thumb       = wp_get_attachment_image_src( $id, 'woocommerce_thumbnail' );
+			$srcset_raw  = wp_get_attachment_image_srcset( $id, 'woocommerce_single' );
+			$sizes_raw   = wp_get_attachment_image_sizes( $id, 'woocommerce_single' );
 
 			if ( ! $full ) {
 				continue;
 			}
 
 			$images[] = [
-				'id'    => $id,
-				'src'   => $full[0],
-				'thumb' => $thumb ? $thumb[0] : $full[0],
-				'alt'   => (string) get_post_meta( $id, '_wp_attachment_image_alt', true ),
+				'id'     => $id,
+				'full'   => $full[0],
+				'image'  => $single ? $single[0] : $full[0],
+				'thumb'  => $thumb ? $thumb[0] : $full[0],
+				'alt'    => (string) get_post_meta( $id, '_wp_attachment_image_alt', true ),
+				'title'  => (string) get_the_title( $id ),
+				'srcset' => $srcset_raw ?: '',
+				'sizes'  => $sizes_raw ?: '',
 			];
 		}
 
-		$data['variation_gallery_images'] = $images;
+		$data['custom_variation_gallery'] = $images;
 
 		return $data;
 	}
