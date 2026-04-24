@@ -30,23 +30,23 @@ class ProductImportPage {
 
 		if ( empty( $erp_url ) || empty( $token ) ) {
 			echo '<div class="notice notice-warning inline"><p>'
-				. esc_html__( 'Please configure the ERP Environment URL and API Token on the Connection tab first.', 'woocommerce-ideaerp' )
+				. esc_html__( 'Skonfiguruj najpierw adres URL środowiska ERP i token API na karcie Połączenie.', 'woocommerce-ideaerp' )
 				. '</p></div>';
 			return;
 		}
 		?>
 		<div id="wideaerp-import-wrap">
-			<p><?php esc_html_e( 'Load the product list from IdeaERP, select the products you want to import, then click "Import Selected". Use "Group Variants" to manually merge simple products into a variable product before importing.', 'woocommerce-ideaerp' ); ?></p>
+			<p><?php esc_html_e( 'Załaduj listę produktów z IdeaERP, wybierz produkty do zaimportowania, a następnie kliknij „Importuj zaznaczone". Użyj „Grupuj warianty", aby ręcznie scalić proste produkty w produkt z wariantami przed importem.', 'woocommerce-ideaerp' ); ?></p>
 
 			<div style="margin-bottom:12px;">
 				<button type="button" id="wideaerp-load-products" class="button button-secondary">
-					<?php esc_html_e( 'Load Products from ERP', 'woocommerce-ideaerp' ); ?>
+					<?php esc_html_e( 'Załaduj produkty z ERP', 'woocommerce-ideaerp' ); ?>
 				</button>
 				<button type="button" id="wideaerp-group-variants" class="button button-secondary" disabled style="margin-left:8px;">
-					<?php esc_html_e( 'Group Variants', 'woocommerce-ideaerp' ); ?>
+					<?php esc_html_e( 'Grupuj warianty', 'woocommerce-ideaerp' ); ?>
 				</button>
 				<button type="button" id="wideaerp-import-selected" class="button button-primary" disabled style="margin-left:8px;">
-					<?php esc_html_e( 'Import Selected', 'woocommerce-ideaerp' ); ?>
+					<?php esc_html_e( 'Importuj zaznaczone', 'woocommerce-ideaerp' ); ?>
 				</button>
 				<span id="wideaerp-spinner" class="spinner" style="float:none;margin-top:0;vertical-align:middle;display:none;"></span>
 			</div>
@@ -57,7 +57,7 @@ class ProductImportPage {
 				<p>
 					<label>
 						<input type="checkbox" id="wideaerp-select-all" />
-						<?php esc_html_e( 'Select all', 'woocommerce-ideaerp' ); ?>
+						<?php esc_html_e( 'Zaznacz wszystkie', 'woocommerce-ideaerp' ); ?>
 					</label>
 					<span id="wideaerp-selected-count" style="margin-left:12px;color:#666;"></span>
 				</p>
@@ -66,11 +66,11 @@ class ProductImportPage {
 						<tr>
 							<th style="width:32px;"></th>
 							<th><?php esc_html_e( 'SKU', 'woocommerce-ideaerp' ); ?></th>
-							<th><?php esc_html_e( 'Name', 'woocommerce-ideaerp' ); ?></th>
-							<th><?php esc_html_e( 'Price', 'woocommerce-ideaerp' ); ?></th>
-							<th><?php esc_html_e( 'Stock', 'woocommerce-ideaerp' ); ?></th>
-							<th><?php esc_html_e( 'Type', 'woocommerce-ideaerp' ); ?></th>
-							<th><?php esc_html_e( 'In WooCommerce', 'woocommerce-ideaerp' ); ?></th>
+							<th><?php esc_html_e( 'Nazwa', 'woocommerce-ideaerp' ); ?></th>
+							<th><?php esc_html_e( 'Cena', 'woocommerce-ideaerp' ); ?></th>
+							<th><?php esc_html_e( 'Stan mag.', 'woocommerce-ideaerp' ); ?></th>
+							<th><?php esc_html_e( 'Typ', 'woocommerce-ideaerp' ); ?></th>
+							<th><?php esc_html_e( 'W WooCommerce', 'woocommerce-ideaerp' ); ?></th>
 						</tr>
 					</thead>
 					<tbody id="wideaerp-products-tbody">
@@ -79,7 +79,7 @@ class ProductImportPage {
 			</div>
 
 			<div id="wideaerp-import-results" style="margin-top:16px;display:none;">
-				<h3><?php esc_html_e( 'Import Results', 'woocommerce-ideaerp' ); ?></h3>
+				<h3><?php esc_html_e( 'Wyniki importu', 'woocommerce-ideaerp' ); ?></h3>
 				<ul id="wideaerp-results-list"></ul>
 			</div>
 		</div>
@@ -88,17 +88,17 @@ class ProductImportPage {
 		<div id="wideaerp-group-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;z-index:100000;background:rgba(0,0,0,.5);">
 			<div style="background:#fff;margin:40px auto;max-width:900px;max-height:calc(100vh - 80px);overflow-y:auto;border-radius:4px;box-shadow:0 4px 24px rgba(0,0,0,.3);">
 				<div style="padding:16px 20px;border-bottom:1px solid #ddd;display:flex;align-items:center;justify-content:space-between;">
-					<h2 style="margin:0;font-size:16px;"><?php esc_html_e( 'Group Variants', 'woocommerce-ideaerp' ); ?></h2>
-					<button type="button" id="wideaerp-modal-close" class="button" style="margin:0;">&times; <?php esc_html_e( 'Close', 'woocommerce-ideaerp' ); ?></button>
+					<h2 style="margin:0;font-size:16px;"><?php esc_html_e( 'Grupuj warianty', 'woocommerce-ideaerp' ); ?></h2>
+					<button type="button" id="wideaerp-modal-close" class="button" style="margin:0;">&times; <?php esc_html_e( 'Zamknij', 'woocommerce-ideaerp' ); ?></button>
 				</div>
 				<div style="padding:16px 20px;">
 					<p style="color:#555;margin-top:0;">
-						<?php esc_html_e( 'Drag simple products into a group to import them as a single variable product. Only checked simple products are shown here.', 'woocommerce-ideaerp' ); ?>
+						<?php esc_html_e( 'Przeciągnij proste produkty do grupy, aby zaimportować je jako jeden produkt z wariantami. Wyświetlane są tylko zaznaczone proste produkty.', 'woocommerce-ideaerp' ); ?>
 					</p>
 
 					<!-- Ungrouped zone -->
 					<div style="margin-bottom:20px;">
-						<h3 style="margin:0 0 8px;"><?php esc_html_e( 'Ungrouped (import as-is)', 'woocommerce-ideaerp' ); ?></h3>
+						<h3 style="margin:0 0 8px;"><?php esc_html_e( 'Niezgrupowane (importuj bez zmian)', 'woocommerce-ideaerp' ); ?></h3>
 						<div id="wideaerp-ungrouped-zone"
 							style="min-height:60px;border:2px dashed #ccc;border-radius:4px;padding:8px;"
 							data-zone="ungrouped">
@@ -108,14 +108,14 @@ class ProductImportPage {
 					<!-- Custom groups -->
 					<div id="wideaerp-custom-groups"></div>
 
-					<button type="button" id="wideaerp-add-group" class="button button-secondary">
-						+ <?php esc_html_e( 'New Group', 'woocommerce-ideaerp' ); ?>
-					</button>
-				</div>
-				<div style="padding:12px 20px;border-top:1px solid #ddd;text-align:right;">
-					<button type="button" id="wideaerp-modal-apply" class="button button-primary">
-						<?php esc_html_e( 'Apply Grouping', 'woocommerce-ideaerp' ); ?>
-					</button>
+				<button type="button" id="wideaerp-add-group" class="button button-secondary">
+					+ <?php esc_html_e( 'Nowa grupa', 'woocommerce-ideaerp' ); ?>
+				</button>
+			</div>
+			<div style="padding:12px 20px;border-top:1px solid #ddd;text-align:right;">
+				<button type="button" id="wideaerp-modal-apply" class="button button-primary">
+					<?php esc_html_e( 'Zastosuj grupowanie', 'woocommerce-ideaerp' ); ?>
+				</button>
 				</div>
 			</div>
 		</div>
@@ -205,7 +205,7 @@ class ProductImportPage {
 
 			function updateSelectedCount() {
 				const total = $('input.wideaerp-product-cb:checked').length;
-				$('#wideaerp-selected-count').text(total + ' <?php echo esc_js( __( 'selected', 'woocommerce-ideaerp' ) ); ?>');
+				$('#wideaerp-selected-count').text(total + ' <?php echo esc_js( __( 'zaznaczonych', 'woocommerce-ideaerp' ) ); ?>');
 				$('#wideaerp-import-selected').prop('disabled', total === 0);
 				$('#wideaerp-group-variants').prop('disabled', checkedSimpleCount() < 2);
 			}
@@ -229,21 +229,21 @@ class ProductImportPage {
 					$btn.prop('disabled', false);
 
 					if (!response.success) {
-						showNotice(response.data.message || '<?php echo esc_js( __( 'Unknown error.', 'woocommerce-ideaerp' ) ); ?>', 'error');
-						return;
-					}
+					showNotice(response.data.message || '<?php echo esc_js( __( 'Nieznany błąd.', 'woocommerce-ideaerp' ) ); ?>', 'error');
+					return;
+				}
 
-					allProducts = response.data.products;
-					renderTable(allProducts);
-					$('#wideaerp-products-table-wrap').show();
-					showNotice(
-						response.data.products.length + ' <?php echo esc_js( __( 'products loaded.', 'woocommerce-ideaerp' ) ); ?>',
-						'success'
-					);
-				}).fail(function() {
-					$('#wideaerp-spinner').hide();
-					$btn.prop('disabled', false);
-					showNotice('<?php echo esc_js( __( 'Request failed. Check your connection settings.', 'woocommerce-ideaerp' ) ); ?>', 'error');
+				allProducts = response.data.products;
+				renderTable(allProducts);
+				$('#wideaerp-products-table-wrap').show();
+				showNotice(
+					response.data.products.length + ' <?php echo esc_js( __( 'produktów załadowanych.', 'woocommerce-ideaerp' ) ); ?>',
+					'success'
+				);
+			}).fail(function() {
+				$('#wideaerp-spinner').hide();
+				$btn.prop('disabled', false);
+				showNotice('<?php echo esc_js( __( 'Żądanie nie powiodło się. Sprawdź ustawienia połączenia.', 'woocommerce-ideaerp' ) ); ?>', 'error');
 				});
 			});
 
@@ -256,11 +256,11 @@ class ProductImportPage {
 				$.each(products, function(i, p) {
 					const inWC = p.wc_id ? '&#10003; <a href="' + p.wc_edit_url + '" target="_blank">#' + p.wc_id + '</a>' : '&mdash;';
 					let typeLabel;
-					if (p.is_variable) {
-						typeLabel = '<?php echo esc_js( __( 'Variable', 'woocommerce-ideaerp' ) ); ?>'
-							+ ' <span style="color:#888;font-size:11px;">(' + p.variant_count + ' <?php echo esc_js( __( 'variants', 'woocommerce-ideaerp' ) ); ?>)</span>';
-					} else {
-						typeLabel = '<?php echo esc_js( __( 'Simple', 'woocommerce-ideaerp' ) ); ?>';
+				if (p.is_variable) {
+					typeLabel = '<?php echo esc_js( __( 'Zmienny', 'woocommerce-ideaerp' ) ); ?>'
+						+ ' <span style="color:#888;font-size:11px;">(' + p.variant_count + ' <?php echo esc_js( __( 'wariantów', 'woocommerce-ideaerp' ) ); ?>)</span>';
+				} else {
+					typeLabel = '<?php echo esc_js( __( 'Prosty', 'woocommerce-ideaerp' ) ); ?>';
 					}
 					$tbody.append(
 						'<tr data-erp-id="' + p.erp_id + '" data-is-variable="' + (p.is_variable ? '1' : '0') + '">' +
@@ -309,11 +309,11 @@ class ProductImportPage {
 					$('#wideaerp-load-products').prop('disabled', false);
 
 					if (!response.success) {
-						showNotice(response.data.message || '<?php echo esc_js( __( 'Import failed.', 'woocommerce-ideaerp' ) ); ?>', 'error');
-						return;
-					}
+					showNotice(response.data.message || '<?php echo esc_js( __( 'Import nie powiódł się.', 'woocommerce-ideaerp' ) ); ?>', 'error');
+					return;
+				}
 
-					const results = response.data.results;
+				const results = response.data.results;
 					const $list   = $('#wideaerp-results-list').empty();
 					let ok = 0, errors = 0;
 
@@ -325,16 +325,16 @@ class ProductImportPage {
 					});
 
 					$('#wideaerp-import-results').show();
-					showNotice(ok + ' <?php echo esc_js( __( 'imported', 'woocommerce-ideaerp' ) ); ?>, ' + errors + ' <?php echo esc_js( __( 'errors', 'woocommerce-ideaerp' ) ); ?>.', errors ? 'warning' : 'success');
+					showNotice(ok + ' <?php echo esc_js( __( 'zaimportowanych', 'woocommerce-ideaerp' ) ); ?>, ' + errors + ' <?php echo esc_js( __( 'błędów', 'woocommerce-ideaerp' ) ); ?>.', errors ? 'warning' : 'success');
 
 					$('#wideaerp-load-products').trigger('click');
 				}).fail(function() {
 					$('#wideaerp-spinner').hide();
 					$('#wideaerp-import-selected').prop('disabled', false);
 					$('#wideaerp-load-products').prop('disabled', false);
-					showNotice('<?php echo esc_js( __( 'Request failed.', 'woocommerce-ideaerp' ) ); ?>', 'error');
-				});
+				showNotice('<?php echo esc_js( __( 'Żądanie nie powiodło się.', 'woocommerce-ideaerp' ) ); ?>', 'error');
 			});
+		});
 
 			// ----------------------------------------------------------------
 			// Drag-and-drop helpers
@@ -383,7 +383,7 @@ class ProductImportPage {
 				$item.append('<span style="cursor:grab;color:#aaa;font-size:16px;">&#9776;</span>');
 				$item.append('<strong>' + $('<span>').text(sku).html() + '</strong>');
 				$item.append('<span style="color:#555;">' + $('<span>').text(name).html() + '</span>');
-				const $remove = $('<button type="button" class="button button-small" style="margin-left:auto;" title="<?php echo esc_js( __( 'Remove from group', 'woocommerce-ideaerp' ) ); ?>">&times;</button>');
+				const $remove = $('<button type="button" class="button button-small" style="margin-left:auto;" title="<?php echo esc_js( __( 'Usuń z grupy', 'woocommerce-ideaerp' ) ); ?>">&times;</button>');
 				$remove.on('click', function() {
 					$('#wideaerp-ungrouped-zone').append($item);
 				});
@@ -397,8 +397,8 @@ class ProductImportPage {
 				const gid = 'wideaerp-group-' + groupCounter;
 				const $box = $('<div class="wideaerp-group-box" data-group-id="' + groupCounter + '"></div>');
 				const $header = $('<div class="wideaerp-group-header"></div>');
-				const $nameInput = $('<input type="text" class="regular-text" value="' + $('<span>').text(name || ('<?php echo esc_js( __( 'Group', 'woocommerce-ideaerp' ) ); ?> ' + groupCounter)).html() + '" placeholder="<?php echo esc_js( __( 'Group name (optional)', 'woocommerce-ideaerp' ) ); ?>" />');
-				const $del = $('<button type="button" class="button button-small"><?php echo esc_js( __( 'Remove Group', 'woocommerce-ideaerp' ) ); ?></button>');
+				const $nameInput = $('<input type="text" class="regular-text" value="' + $('<span>').text(name || ('<?php echo esc_js( __( 'Grupa', 'woocommerce-ideaerp' ) ); ?> ' + groupCounter)).html() + '" placeholder="<?php echo esc_js( __( 'Nazwa grupy (opcjonalna)', 'woocommerce-ideaerp' ) ); ?>" />');
+				const $del = $('<button type="button" class="button button-small"><?php echo esc_js( __( 'Usuń grupę', 'woocommerce-ideaerp' ) ); ?></button>');
 				$del.on('click', function() {
 					// Move items back to ungrouped before removing
 					$box.find('.wideaerp-draggable-item').each(function() {
@@ -411,8 +411,8 @@ class ProductImportPage {
 			makeDropZone($zone);
 
 			const $defaultWrap   = $('<div style="padding:6px 8px 8px;border-top:1px solid #eee;background:#fafafa;font-size:12px;"></div>');
-			const $defaultLabel  = $('<label style="display:block;margin-bottom:4px;color:#666;"><?php echo esc_js( __( 'Default variation:', 'woocommerce-ideaerp' ) ); ?></label>');
-			const $defaultSelect = $('<select class="wideaerp-default-variation" style="width:100%;max-width:400px;"><option value=""><?php echo esc_js( __( '— No default —', 'woocommerce-ideaerp' ) ); ?></option></select>');
+		const $defaultLabel  = $('<label style="display:block;margin-bottom:4px;color:#666;"><?php echo esc_js( __( 'Domyślny wariant:', 'woocommerce-ideaerp' ) ); ?></label>');
+		const $defaultSelect = $('<select class="wideaerp-default-variation" style="width:100%;max-width:400px;"><option value=""><?php echo esc_js( __( '— Brak domyślnego —', 'woocommerce-ideaerp' ) ); ?></option></select>');
 			$defaultWrap.append($defaultLabel).append($defaultSelect);
 
 			// Keep the select in sync whenever items are dragged in or out.
@@ -503,8 +503,8 @@ class ProductImportPage {
 						if (idx === 0) {
 							$cb.val(groupKey).prop('checked', true);
 							// Update the type label in the table to reflect the new grouping
-							$cb.closest('tr').find('.wideaerp-type-cell').html(
-								'<em style="color:#0073aa;"><?php echo esc_js( __( 'Custom Group', 'woocommerce-ideaerp' ) ); ?> (' + ids.length + ')</em>'
+						$cb.closest('tr').find('.wideaerp-type-cell').html(
+							'<em style="color:#0073aa;"><?php echo esc_js( __( 'Niestandardowa grupa', 'woocommerce-ideaerp' ) ); ?> (' + ids.length + ')</em>'
 							);
 						} else {
 							// Restore original key and uncheck — this row is covered by the group key above.
@@ -531,7 +531,7 @@ class ProductImportPage {
 		check_ajax_referer( 'wideaerp_nonce' );
 
 		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_send_json_error( [ 'message' => __( 'Insufficient permissions.', 'woocommerce-ideaerp' ) ] );
+			wp_send_json_error( [ 'message' => __( 'Niewystarczające uprawnienia.', 'woocommerce-ideaerp' ) ] );
 		}
 
 		try {
@@ -649,7 +649,7 @@ class ProductImportPage {
 		check_ajax_referer( 'wideaerp_nonce' );
 
 		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_send_json_error( [ 'message' => __( 'Insufficient permissions.', 'woocommerce-ideaerp' ) ] );
+			wp_send_json_error( [ 'message' => __( 'Niewystarczające uprawnienia.', 'woocommerce-ideaerp' ) ] );
 		}
 
 		// Keys are either "tmpl:{id}" (variable group) or "id:{erp_id}" (simple).
@@ -657,7 +657,7 @@ class ProductImportPage {
 		$raw_keys = array_filter( array_map( 'sanitize_text_field', $raw_keys ) );
 
 		if ( empty( $raw_keys ) ) {
-			wp_send_json_error( [ 'message' => __( 'No products selected.', 'woocommerce-ideaerp' ) ] );
+			wp_send_json_error( [ 'message' => __( 'Nie wybrano żadnych produktów.', 'woocommerce-ideaerp' ) ] );
 		}
 
 		try {
@@ -702,7 +702,7 @@ class ProductImportPage {
 						$results[] = [
 							'sku'    => 'tmpl#' . $tmpl_id,
 							'action' => '',
-							'error'  => __( 'Product template not found in ERP.', 'woocommerce-ideaerp' ),
+							'error'  => __( 'Szablon produktu nie znaleziony w ERP.', 'woocommerce-ideaerp' ),
 						];
 						continue;
 					}
@@ -729,7 +729,7 @@ class ProductImportPage {
 						$results[] = [
 							'sku'    => '#' . $erp_id,
 							'action' => '',
-							'error'  => __( 'Product not found in ERP.', 'woocommerce-ideaerp' ),
+							'error'  => __( 'Produkt nie znaleziony w ERP.', 'woocommerce-ideaerp' ),
 						];
 						continue;
 					}
@@ -768,7 +768,7 @@ class ProductImportPage {
 					$results[] = [
 						'sku'    => implode( ',', $erp_ids ),
 						'action' => '',
-						'error'  => __( 'Custom group requires at least 2 products.', 'woocommerce-ideaerp' ),
+						'error'  => __( 'Niestandardowa grupa wymaga co najmniej 2 produktów.', 'woocommerce-ideaerp' ),
 					];
 					continue;
 				}

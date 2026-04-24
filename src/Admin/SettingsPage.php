@@ -32,7 +32,7 @@ class SettingsPage {
 
 	public function add_menu(): void {
 		add_options_page(
-			__( 'IdeaERP Integration', 'woocommerce-ideaerp' ),
+			__( 'Integracja IdeaERP', 'woocommerce-ideaerp' ),
 			__( 'IdeaERP', 'woocommerce-ideaerp' ),
 			'manage_options',
 			self::MENU_SLUG,
@@ -47,26 +47,26 @@ class SettingsPage {
 		register_setting( 'wideaerp_connection_group', 'wideaerp_shop_id',   [ 'sanitize_callback' => 'sanitize_text_field' ] );
 		register_setting( 'wideaerp_connection_group', 'wideaerp_integration_config', [ 'sanitize_callback' => 'absint' ] );
 
-		add_settings_section( 'wideaerp_api_section', __( 'IdeaERP API Connection', 'woocommerce-ideaerp' ), null, 'wideaerp_tab_connection' );
+		add_settings_section( 'wideaerp_api_section', __( 'Połączenie API IdeaERP', 'woocommerce-ideaerp' ), null, 'wideaerp_tab_connection' );
 
-		add_settings_field( 'wideaerp_erp_url', __( 'ERP Environment URL', 'woocommerce-ideaerp' ),
+		add_settings_field( 'wideaerp_erp_url', __( 'Adres URL środowiska ERP', 'woocommerce-ideaerp' ),
 			[ $this, 'field_erp_url' ], 'wideaerp_tab_connection', 'wideaerp_api_section' );
 
-		add_settings_field( 'wideaerp_api_token', __( 'API Token', 'woocommerce-ideaerp' ),
+		add_settings_field( 'wideaerp_api_token', __( 'Token API', 'woocommerce-ideaerp' ),
 			[ $this, 'field_api_token' ], 'wideaerp_tab_connection', 'wideaerp_api_section' );
 
-		add_settings_field( 'wideaerp_shop_id', __( 'Shop ID / Name in IdeaERP', 'woocommerce-ideaerp' ),
+		add_settings_field( 'wideaerp_shop_id', __( 'ID / Nazwa sklepu w IdeaERP', 'woocommerce-ideaerp' ),
 			[ $this, 'field_shop_id' ], 'wideaerp_tab_connection', 'wideaerp_api_section' );
 
-		add_settings_field( 'wideaerp_integration_config', __( 'Integration Config ID', 'woocommerce-ideaerp' ),
+		add_settings_field( 'wideaerp_integration_config', __( 'ID konfiguracji integracji', 'woocommerce-ideaerp' ),
 			[ $this, 'field_integration_config' ], 'wideaerp_tab_connection', 'wideaerp_api_section' );
 
 		// --- Orders tab ---
 		register_setting( 'wideaerp_orders_group', 'wideaerp_order_trigger_status', [ 'sanitize_callback' => 'sanitize_key', 'default' => 'processing' ] );
 
-		add_settings_section( 'wideaerp_orders_section', __( 'Order Export Settings', 'woocommerce-ideaerp' ), [ $this, 'orders_section_description' ], 'wideaerp_tab_orders' );
+		add_settings_section( 'wideaerp_orders_section', __( 'Ustawienia eksportu zamówień', 'woocommerce-ideaerp' ), [ $this, 'orders_section_description' ], 'wideaerp_tab_orders' );
 
-		add_settings_field( 'wideaerp_order_trigger_status', __( 'Export trigger status', 'woocommerce-ideaerp' ),
+		add_settings_field( 'wideaerp_order_trigger_status', __( 'Status wyzwalający eksport', 'woocommerce-ideaerp' ),
 			[ $this, 'field_order_trigger_status' ], 'wideaerp_tab_orders', 'wideaerp_orders_section' );
 
 		// --- Stock & Price Sync section (Orders tab) ---
@@ -75,18 +75,18 @@ class SettingsPage {
 		register_setting( 'wideaerp_orders_group', StockPriceSyncer::OPT_BATCH_SIZE,     [ 'sanitize_callback' => 'absint', 'default' => 100 ] );
 		register_setting( 'wideaerp_orders_group', StockPriceSyncer::OPT_BATCH_DELAY,    [ 'sanitize_callback' => 'absint', 'default' => 30 ] );
 
-		add_settings_section( 'wideaerp_sync_section', __( 'Stock & Price Sync', 'woocommerce-ideaerp' ), [ $this, 'sync_section_description' ], 'wideaerp_tab_orders' );
+		add_settings_section( 'wideaerp_sync_section', __( 'Synchronizacja stanu i cen', 'woocommerce-ideaerp' ), [ $this, 'sync_section_description' ], 'wideaerp_tab_orders' );
 
-		add_settings_field( StockPriceSyncer::OPT_STOCK_INTERVAL, __( 'Stock sync interval (minutes)', 'woocommerce-ideaerp' ),
+		add_settings_field( StockPriceSyncer::OPT_STOCK_INTERVAL, __( 'Interwał synchronizacji stanu (minuty)', 'woocommerce-ideaerp' ),
 			[ $this, 'field_stock_sync_interval' ], 'wideaerp_tab_orders', 'wideaerp_sync_section' );
 
-		add_settings_field( StockPriceSyncer::OPT_PRICE_INTERVAL, __( 'Price sync interval (minutes)', 'woocommerce-ideaerp' ),
+		add_settings_field( StockPriceSyncer::OPT_PRICE_INTERVAL, __( 'Interwał synchronizacji cen (minuty)', 'woocommerce-ideaerp' ),
 			[ $this, 'field_price_sync_interval' ], 'wideaerp_tab_orders', 'wideaerp_sync_section' );
 
-		add_settings_field( StockPriceSyncer::OPT_BATCH_SIZE, __( 'Products per batch', 'woocommerce-ideaerp' ),
+		add_settings_field( StockPriceSyncer::OPT_BATCH_SIZE, __( 'Produkty na partię', 'woocommerce-ideaerp' ),
 			[ $this, 'field_sync_batch_size' ], 'wideaerp_tab_orders', 'wideaerp_sync_section' );
 
-		add_settings_field( StockPriceSyncer::OPT_BATCH_DELAY, __( 'Delay between batches (seconds)', 'woocommerce-ideaerp' ),
+		add_settings_field( StockPriceSyncer::OPT_BATCH_DELAY, __( 'Opóźnienie między partiami (sekundy)', 'woocommerce-ideaerp' ),
 			[ $this, 'field_sync_batch_delay' ], 'wideaerp_tab_orders', 'wideaerp_sync_section' );
 	}
 
@@ -95,11 +95,11 @@ class SettingsPage {
 	// -------------------------------------------------------------------------
 
 	public function orders_section_description(): void {
-		echo '<p>' . esc_html__( 'Configure when WooCommerce orders are pushed to IdeaERP.', 'woocommerce-ideaerp' ) . '</p>';
+		echo '<p>' . esc_html__( 'Skonfiguruj, kiedy zamówienia WooCommerce są przesyłane do IdeaERP.', 'woocommerce-ideaerp' ) . '</p>';
 	}
 
 	public function sync_section_description(): void {
-		echo '<p>' . esc_html__( 'IdeaERP stock and price are downloaded once per interval and applied to WooCommerce in staggered batches. Only products whose values changed are saved.', 'woocommerce-ideaerp' ) . '</p>';
+		echo '<p>' . esc_html__( 'Stan magazynowy i ceny IdeaERP są pobierane raz na interwał i stosowane w WooCommerce w rozłożonych partiach. Zapisywane są tylko produkty, których wartości uległy zmianie.', 'woocommerce-ideaerp' ) . '</p>';
 	}
 
 	// -------------------------------------------------------------------------
@@ -125,7 +125,7 @@ class SettingsPage {
 			'<input type="text" id="wideaerp_shop_id" name="wideaerp_shop_id" value="%s" class="regular-text" placeholder="1" />
 			<p class="description">%s</p>',
 			esc_attr( get_option( 'wideaerp_shop_id', '' ) ),
-			esc_html__( 'The numeric ID or name of the shop in IdeaERP (sale_order.shop_id).', 'woocommerce-ideaerp' )
+			esc_html__( 'Numeryczne ID lub nazwa sklepu w IdeaERP (sale_order.shop_id).', 'woocommerce-ideaerp' )
 		);
 	}
 
@@ -134,7 +134,7 @@ class SettingsPage {
 			'<input type="number" id="wideaerp_integration_config" name="wideaerp_integration_config" value="%s" class="small-text" min="0" />
 			<p class="description">%s</p>',
 			esc_attr( get_option( 'wideaerp_integration_config', '' ) ),
-			esc_html__( 'The integration_config integer assigned to this WooCommerce store in IdeaERP. Leave 0 if unknown.', 'woocommerce-ideaerp' )
+			esc_html__( 'Liczba całkowita integration_config przypisana do tego sklepu WooCommerce w IdeaERP. Zostaw 0, jeśli nieznane.', 'woocommerce-ideaerp' )
 		);
 	}
 
@@ -144,7 +144,7 @@ class SettingsPage {
 			<p class="description">%3$s</p>',
 			esc_attr( StockPriceSyncer::OPT_STOCK_INTERVAL ),
 			esc_attr( get_option( StockPriceSyncer::OPT_STOCK_INTERVAL, 60 ) ),
-			esc_html__( 'How often to download stock quantities from IdeaERP and update WooCommerce. Default: 60.', 'woocommerce-ideaerp' )
+			esc_html__( 'Jak często pobierać stany magazynowe z IdeaERP i aktualizować WooCommerce. Domyślnie: 60.', 'woocommerce-ideaerp' )
 		);
 	}
 
@@ -154,7 +154,7 @@ class SettingsPage {
 			<p class="description">%3$s</p>',
 			esc_attr( StockPriceSyncer::OPT_PRICE_INTERVAL ),
 			esc_attr( get_option( StockPriceSyncer::OPT_PRICE_INTERVAL, 60 ) ),
-			esc_html__( 'How often to download prices from IdeaERP and update WooCommerce. Default: 60.', 'woocommerce-ideaerp' )
+			esc_html__( 'Jak często pobierać ceny z IdeaERP i aktualizować WooCommerce. Domyślnie: 60.', 'woocommerce-ideaerp' )
 		);
 	}
 
@@ -164,7 +164,7 @@ class SettingsPage {
 			<p class="description">%3$s</p>',
 			esc_attr( StockPriceSyncer::OPT_BATCH_SIZE ),
 			esc_attr( get_option( StockPriceSyncer::OPT_BATCH_SIZE, 100 ) ),
-			esc_html__( 'Number of products processed per batch job. Default: 100.', 'woocommerce-ideaerp' )
+			esc_html__( 'Liczba produktów przetwarzanych na partię. Domyślnie: 100.', 'woocommerce-ideaerp' )
 		);
 	}
 
@@ -174,7 +174,7 @@ class SettingsPage {
 			<p class="description">%3$s</p>',
 			esc_attr( StockPriceSyncer::OPT_BATCH_DELAY ),
 			esc_attr( get_option( StockPriceSyncer::OPT_BATCH_DELAY, 30 ) ),
-			esc_html__( 'Seconds to wait between dispatching each batch job. Increase to reduce DB load spikes. Default: 30.', 'woocommerce-ideaerp' )
+			esc_html__( 'Sekundy oczekiwania między wysyłaniem kolejnych partii. Zwiększ, aby zmniejszyć skoki obciążenia bazy danych. Domyślnie: 30.', 'woocommerce-ideaerp' )
 		);
 	}
 
@@ -194,7 +194,7 @@ class SettingsPage {
 			);
 		}
 		echo '</select>';
-		echo '<p class="description">' . esc_html__( 'When a WooCommerce order reaches this status it will be pushed to IdeaERP. Default: processing.', 'woocommerce-ideaerp' ) . '</p>';
+		echo '<p class="description">' . esc_html__( 'Gdy zamówienie WooCommerce osiągnie ten status, zostanie przesłane do IdeaERP. Domyślnie: processing.', 'woocommerce-ideaerp' ) . '</p>';
 	}
 
 	// -------------------------------------------------------------------------
@@ -209,14 +209,14 @@ class SettingsPage {
 		check_ajax_referer( 'wideaerp_orders_nonce', 'nonce' );
 
 		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_send_json_error( [ 'message' => __( 'Insufficient permissions.', 'woocommerce-ideaerp' ) ], 403 );
+			wp_send_json_error( [ 'message' => __( 'Niewystarczające uprawnienia.', 'woocommerce-ideaerp' ) ], 403 );
 		}
 
 		$url   = get_option( 'wideaerp_erp_url', '' );
 		$token = get_option( 'wideaerp_api_token', '' );
 
 		if ( ! $url || ! $token ) {
-			wp_send_json_error( [ 'message' => __( 'ERP URL or API token not configured.', 'woocommerce-ideaerp' ) ] );
+			wp_send_json_error( [ 'message' => __( 'Adres URL ERP lub token API nie są skonfigurowane.', 'woocommerce-ideaerp' ) ] );
 		}
 
 		try {
@@ -237,7 +237,7 @@ class SettingsPage {
 		check_ajax_referer( 'wideaerp_orders_nonce', 'nonce' );
 
 		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_send_json_error( [ 'message' => __( 'Insufficient permissions.', 'woocommerce-ideaerp' ) ], 403 );
+			wp_send_json_error( [ 'message' => __( 'Niewystarczające uprawnienia.', 'woocommerce-ideaerp' ) ], 403 );
 		}
 
 		$raw = isset( $_POST['map'] ) && is_array( $_POST['map'] ) ? $_POST['map'] : []; // phpcs:ignore WordPress.Security.NonceVerification
@@ -251,7 +251,7 @@ class SettingsPage {
 		}
 
 		update_option( 'wideaerp_payment_method_map', $map );
-		wp_send_json_success( [ 'message' => __( 'Payment method mapping saved.', 'woocommerce-ideaerp' ) ] );
+		wp_send_json_success( [ 'message' => __( 'Mapowanie metod płatności zapisane.', 'woocommerce-ideaerp' ) ] );
 	}
 
 	/**
@@ -262,14 +262,14 @@ class SettingsPage {
 		check_ajax_referer( 'wideaerp_orders_nonce', 'nonce' );
 
 		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_send_json_error( [ 'message' => __( 'Insufficient permissions.', 'woocommerce-ideaerp' ) ], 403 );
+			wp_send_json_error( [ 'message' => __( 'Niewystarczające uprawnienia.', 'woocommerce-ideaerp' ) ], 403 );
 		}
 
 		$url   = get_option( 'wideaerp_erp_url', '' );
 		$token = get_option( 'wideaerp_api_token', '' );
 
 		if ( ! $url || ! $token ) {
-			wp_send_json_error( [ 'message' => __( 'ERP URL or API token not configured.', 'woocommerce-ideaerp' ) ] );
+			wp_send_json_error( [ 'message' => __( 'Adres URL ERP lub token API nie są skonfigurowane.', 'woocommerce-ideaerp' ) ] );
 		}
 
 		try {
@@ -290,7 +290,7 @@ class SettingsPage {
 		check_ajax_referer( 'wideaerp_orders_nonce', 'nonce' );
 
 		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_send_json_error( [ 'message' => __( 'Insufficient permissions.', 'woocommerce-ideaerp' ) ], 403 );
+			wp_send_json_error( [ 'message' => __( 'Niewystarczające uprawnienia.', 'woocommerce-ideaerp' ) ], 403 );
 		}
 
 		$raw = isset( $_POST['map'] ) && is_array( $_POST['map'] ) ? $_POST['map'] : []; // phpcs:ignore WordPress.Security.NonceVerification
@@ -304,7 +304,7 @@ class SettingsPage {
 		}
 
 		update_option( 'wideaerp_pricelist_map', $map );
-		wp_send_json_success( [ 'message' => __( 'Pricelist mapping saved.', 'woocommerce-ideaerp' ) ] );
+		wp_send_json_success( [ 'message' => __( 'Mapowanie cenników zapisane.', 'woocommerce-ideaerp' ) ] );
 	}
 
 	/**
@@ -315,14 +315,14 @@ class SettingsPage {
 		check_ajax_referer( 'wideaerp_orders_nonce', 'nonce' );
 
 		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_send_json_error( [ 'message' => __( 'Insufficient permissions.', 'woocommerce-ideaerp' ) ], 403 );
+			wp_send_json_error( [ 'message' => __( 'Niewystarczające uprawnienia.', 'woocommerce-ideaerp' ) ], 403 );
 		}
 
 		$url   = get_option( 'wideaerp_erp_url', '' );
 		$token = get_option( 'wideaerp_api_token', '' );
 
 		if ( ! $url || ! $token ) {
-			wp_send_json_error( [ 'message' => __( 'ERP URL or API token not configured.', 'woocommerce-ideaerp' ) ] );
+			wp_send_json_error( [ 'message' => __( 'Adres URL ERP lub token API nie są skonfigurowane.', 'woocommerce-ideaerp' ) ] );
 		}
 
 		try {
@@ -346,7 +346,7 @@ class SettingsPage {
 		check_ajax_referer( 'wideaerp_orders_nonce', 'nonce' );
 
 		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_send_json_error( [ 'message' => __( 'Insufficient permissions.', 'woocommerce-ideaerp' ) ], 403 );
+			wp_send_json_error( [ 'message' => __( 'Niewystarczające uprawnienia.', 'woocommerce-ideaerp' ) ], 403 );
 		}
 
 		$raw = isset( $_POST['map'] ) && is_array( $_POST['map'] ) ? $_POST['map'] : []; // phpcs:ignore WordPress.Security.NonceVerification
@@ -360,7 +360,7 @@ class SettingsPage {
 		}
 
 		update_option( 'wideaerp_carrier_map', $map );
-		wp_send_json_success( [ 'message' => __( 'Carrier mapping saved.', 'woocommerce-ideaerp' ) ] );
+		wp_send_json_success( [ 'message' => __( 'Mapowanie przewoźników zapisane.', 'woocommerce-ideaerp' ) ] );
 	}
 
 	// -------------------------------------------------------------------------
@@ -375,13 +375,13 @@ class SettingsPage {
 		$active_tab = isset( $_GET['tab'] ) ? sanitize_key( $_GET['tab'] ) : 'connection'; // phpcs:ignore WordPress.Security.NonceVerification
 
 		$tabs = [
-			'connection' => __( 'Connection', 'woocommerce-ideaerp' ),
-			'import'     => __( 'Import Products', 'woocommerce-ideaerp' ),
-			'orders'     => __( 'Orders', 'woocommerce-ideaerp' ),
+			'connection' => __( 'Połączenie', 'woocommerce-ideaerp' ),
+			'import'     => __( 'Importuj produkty', 'woocommerce-ideaerp' ),
+			'orders'     => __( 'Zamówienia', 'woocommerce-ideaerp' ),
 		];
 		?>
 		<div class="wrap">
-			<h1><?php esc_html_e( 'WooCommerce IdeaERP Integration', 'woocommerce-ideaerp' ); ?></h1>
+			<h1><?php esc_html_e( 'Integracja WooCommerce IdeaERP', 'woocommerce-ideaerp' ); ?></h1>
 
 			<nav class="nav-tab-wrapper">
 				<?php foreach ( $tabs as $slug => $label ) : ?>
@@ -398,17 +398,17 @@ class SettingsPage {
 						<?php
 						settings_fields( 'wideaerp_connection_group' );
 						do_settings_sections( 'wideaerp_tab_connection' );
-						submit_button( __( 'Save Settings', 'woocommerce-ideaerp' ) );
-						?>
-					</form>
-				<?php elseif ( $active_tab === 'import' ) : ?>
-					<?php ( new ProductImportPage() )->render(); ?>
-				<?php elseif ( $active_tab === 'orders' ) : ?>
-					<form method="post" action="options.php">
-						<?php
-						settings_fields( 'wideaerp_orders_group' );
-						do_settings_sections( 'wideaerp_tab_orders' );
-						submit_button( __( 'Save Settings', 'woocommerce-ideaerp' ) );
+					submit_button( __( 'Zapisz ustawienia', 'woocommerce-ideaerp' ) );
+					?>
+				</form>
+			<?php elseif ( $active_tab === 'import' ) : ?>
+				<?php ( new ProductImportPage() )->render(); ?>
+			<?php elseif ( $active_tab === 'orders' ) : ?>
+				<form method="post" action="options.php">
+					<?php
+					settings_fields( 'wideaerp_orders_group' );
+					do_settings_sections( 'wideaerp_tab_orders' );
+					submit_button( __( 'Zapisz ustawienia', 'woocommerce-ideaerp' ) );
 						?>
 					</form>
 
@@ -434,15 +434,15 @@ class SettingsPage {
 		$ajax_url   = admin_url( 'admin-ajax.php' );
 		?>
 		<hr style="margin:30px 0;" />
-		<h2><?php esc_html_e( 'Payment Method Mapping', 'woocommerce-ideaerp' ); ?></h2>
-		<p><?php esc_html_e( 'Map each WooCommerce payment method to an IdeaERP payment method. The mapped IdeaERP method will be sent as the payment_term when the order is exported.', 'woocommerce-ideaerp' ); ?></p>
+		<h2><?php esc_html_e( 'Mapowanie metod płatności', 'woocommerce-ideaerp' ); ?></h2>
+		<p><?php esc_html_e( 'Przypisz każdą metodę płatności WooCommerce do metody płatności IdeaERP. Przypisana metoda IdeaERP zostanie wysłana jako payment_term podczas eksportu zamówienia.', 'woocommerce-ideaerp' ); ?></p>
 
 		<div id="wideaerp-pm-map-wrap">
 			<table class="widefat striped" id="wideaerp-pm-map-table" style="max-width:700px;">
 				<thead>
 					<tr>
-						<th><?php esc_html_e( 'WooCommerce Payment Method', 'woocommerce-ideaerp' ); ?></th>
-						<th><?php esc_html_e( 'IdeaERP Payment Method', 'woocommerce-ideaerp' ); ?></th>
+					<th><?php esc_html_e( 'Metoda płatności WooCommerce', 'woocommerce-ideaerp' ); ?></th>
+					<th><?php esc_html_e( 'Metoda płatności IdeaERP', 'woocommerce-ideaerp' ); ?></th>
 					</tr>
 				</thead>
 				<tbody>
@@ -458,17 +458,17 @@ class SettingsPage {
 								        data-wc-id="<?php echo esc_attr( $gateway_id ); ?>"
 								        data-saved="<?php echo esc_attr( $saved_map[ $gateway_id ] ?? '' ); ?>"
 								        style="min-width:220px;">
-									<option value=""><?php esc_html_e( '— loading… —', 'woocommerce-ideaerp' ); ?></option>
-								</select>
-							</td>
-						</tr>
-					<?php endforeach; ?>
-				</tbody>
-			</table>
+								<option value=""><?php esc_html_e( '— ładowanie… —', 'woocommerce-ideaerp' ); ?></option>
+							</select>
+						</td>
+					</tr>
+				<?php endforeach; ?>
+			</tbody>
+		</table>
 
-			<p style="margin-top:12px;">
-				<button type="button" id="wideaerp-pm-map-save" class="button button-primary">
-					<?php esc_html_e( 'Save Mapping', 'woocommerce-ideaerp' ); ?>
+		<p style="margin-top:12px;">
+			<button type="button" id="wideaerp-pm-map-save" class="button button-primary">
+				<?php esc_html_e( 'Zapisz mapowanie', 'woocommerce-ideaerp' ); ?>
 				</button>
 				<span id="wideaerp-pm-map-status" style="margin-left:12px;"></span>
 			</p>
@@ -483,15 +483,15 @@ class SettingsPage {
 			// Fetch ERP payment methods once and populate all selects.
 			$.post( ajaxUrl, { action: 'wideaerp_fetch_erp_payment_methods', nonce: nonce }, function( resp ) {
 				if ( ! resp.success ) {
-					$selects.html('<option value="">' + ( resp.data && resp.data.message ? resp.data.message : <?php echo wp_json_encode( esc_js( __( 'Error loading methods', 'woocommerce-ideaerp' ) ) ); ?> ) + '</option>');
+					$selects.html('<option value="">' + ( resp.data && resp.data.message ? resp.data.message : <?php echo wp_json_encode( esc_js( __( 'Błąd ładowania metod', 'woocommerce-ideaerp' ) ) ); ?> ) + '</option>');
 					return;
 				}
 				var methods = resp.data;
 				$selects.each(function(){
 					var $sel   = $(this);
 					var saved  = $sel.data('saved');
-					var html   = '<option value=""><?php echo esc_js( __( '— not mapped —', 'woocommerce-ideaerp' ) ); ?></option>';
-					$.each( methods, function( i, m ){
+				var html   = '<option value=""><?php echo esc_js( __( '— nie przypisano —', 'woocommerce-ideaerp' ) ); ?></option>';
+				$.each( methods, function( i, m ){
 						var sel = ( String(saved) === String(m.id) ) ? ' selected' : '';
 						html += '<option value="' + m.id + '"' + sel + '>' + $('<span>').text(m.name).html() + '</option>';
 					});
@@ -509,21 +509,21 @@ class SettingsPage {
 				});
 
 				var $btn    = $(this).prop('disabled', true);
-				var $status = $('#wideaerp-pm-map-status').text( <?php echo wp_json_encode( esc_js( __( 'Saving…', 'woocommerce-ideaerp' ) ) ); ?> );
+				var $status = $('#wideaerp-pm-map-status').text( <?php echo wp_json_encode( esc_js( __( 'Zapisywanie…', 'woocommerce-ideaerp' ) ) ); ?> );
 
 				$.post( ajaxUrl, { action: 'wideaerp_save_payment_method_map', nonce: nonce, map: map }, function( resp ){
 					$btn.prop('disabled', false);
 					if ( resp.success ) {
 						$status.css('color','green').text( resp.data.message );
 					} else {
-						$status.css('color','red').text( resp.data && resp.data.message ? resp.data.message : <?php echo wp_json_encode( esc_js( __( 'Save failed.', 'woocommerce-ideaerp' ) ) ); ?> );
-					}
-					setTimeout(function(){ $status.text(''); }, 4000);
-				});
+					$status.css('color','red').text( resp.data && resp.data.message ? resp.data.message : <?php echo wp_json_encode( esc_js( __( 'Zapis nie powiódł się.', 'woocommerce-ideaerp' ) ) ); ?> );
+				}
+				setTimeout(function(){ $status.text(''); }, 4000);
 			});
-		}(jQuery));
-		</script>
-		<?php
+		});
+	}(jQuery));
+	</script>
+	<?php
 	}
 
 	/**
@@ -549,15 +549,15 @@ class SettingsPage {
 		$all_currencies = get_woocommerce_currencies();
 		?>
 		<hr style="margin:30px 0;" />
-		<h2><?php esc_html_e( 'Pricelist Mapping', 'woocommerce-ideaerp' ); ?></h2>
-		<p><?php esc_html_e( 'Map each WooCommerce currency to an IdeaERP pricelist. The mapped pricelist will be sent when an order in that currency is exported.', 'woocommerce-ideaerp' ); ?></p>
+		<h2><?php esc_html_e( 'Mapowanie cenników', 'woocommerce-ideaerp' ); ?></h2>
+		<p><?php esc_html_e( 'Przypisz każdą walutę WooCommerce do cennika IdeaERP. Przypisany cennik zostanie wysłany podczas eksportu zamówienia w tej walucie.', 'woocommerce-ideaerp' ); ?></p>
 
 		<div id="wideaerp-pl-map-wrap">
 			<table class="widefat striped" id="wideaerp-pl-map-table" style="max-width:700px;">
 				<thead>
 					<tr>
-						<th><?php esc_html_e( 'WooCommerce Currency', 'woocommerce-ideaerp' ); ?></th>
-						<th><?php esc_html_e( 'IdeaERP Pricelist', 'woocommerce-ideaerp' ); ?></th>
+					<th><?php esc_html_e( 'Waluta WooCommerce', 'woocommerce-ideaerp' ); ?></th>
+					<th><?php esc_html_e( 'Cennik IdeaERP', 'woocommerce-ideaerp' ); ?></th>
 					</tr>
 				</thead>
 				<tbody>
@@ -572,17 +572,17 @@ class SettingsPage {
 								        data-currency="<?php echo esc_attr( $code ); ?>"
 								        data-saved="<?php echo esc_attr( $saved_map[ $code ] ?? '' ); ?>"
 								        style="min-width:220px;">
-									<option value=""><?php esc_html_e( '— loading… —', 'woocommerce-ideaerp' ); ?></option>
-								</select>
-							</td>
-						</tr>
-					<?php endforeach; ?>
-				</tbody>
-			</table>
+								<option value=""><?php esc_html_e( '— ładowanie… —', 'woocommerce-ideaerp' ); ?></option>
+							</select>
+						</td>
+					</tr>
+				<?php endforeach; ?>
+			</tbody>
+		</table>
 
-			<p style="margin-top:12px;">
-				<button type="button" id="wideaerp-pl-map-save" class="button button-primary">
-					<?php esc_html_e( 'Save Mapping', 'woocommerce-ideaerp' ); ?>
+		<p style="margin-top:12px;">
+			<button type="button" id="wideaerp-pl-map-save" class="button button-primary">
+				<?php esc_html_e( 'Zapisz mapowanie', 'woocommerce-ideaerp' ); ?>
 				</button>
 				<span id="wideaerp-pl-map-status" style="margin-left:12px;"></span>
 			</p>
@@ -597,15 +597,15 @@ class SettingsPage {
 			// Fetch ERP pricelists once and populate all selects.
 			$.post( ajaxUrl, { action: 'wideaerp_fetch_erp_pricelists', nonce: nonce }, function( resp ) {
 				if ( ! resp.success ) {
-					$selects.html('<option value="">' + ( resp.data && resp.data.message ? resp.data.message : <?php echo wp_json_encode( esc_js( __( 'Error loading pricelists', 'woocommerce-ideaerp' ) ) ); ?> ) + '</option>');
+					$selects.html('<option value="">' + ( resp.data && resp.data.message ? resp.data.message : <?php echo wp_json_encode( esc_js( __( 'Błąd ładowania cenników', 'woocommerce-ideaerp' ) ) ); ?> ) + '</option>');
 					return;
 				}
 				var lists = resp.data;
 				$selects.each(function(){
 					var $sel  = $(this);
 					var saved = $sel.data('saved');
-					var html  = '<option value=""><?php echo esc_js( __( '— not mapped —', 'woocommerce-ideaerp' ) ); ?></option>';
-					$.each( lists, function( i, p ){
+				var html  = '<option value=""><?php echo esc_js( __( '— nie przypisano —', 'woocommerce-ideaerp' ) ); ?></option>';
+				$.each( lists, function( i, p ){
 						var label = p.name + ( p.currency ? ' (' + p.currency + ')' : '' );
 						var sel   = ( String(saved) === String(p.id) ) ? ' selected' : '';
 						html += '<option value="' + p.id + '"' + sel + '>' + $('<span>').text(label).html() + '</option>';
@@ -624,21 +624,21 @@ class SettingsPage {
 				});
 
 				var $btn    = $(this).prop('disabled', true);
-				var $status = $('#wideaerp-pl-map-status').text( <?php echo wp_json_encode( esc_js( __( 'Saving…', 'woocommerce-ideaerp' ) ) ); ?> );
+				var $status = $('#wideaerp-pl-map-status').text( <?php echo wp_json_encode( esc_js( __( 'Zapisywanie…', 'woocommerce-ideaerp' ) ) ); ?> );
 
 				$.post( ajaxUrl, { action: 'wideaerp_save_pricelist_map', nonce: nonce, map: map }, function( resp ){
 					$btn.prop('disabled', false);
 					if ( resp.success ) {
 						$status.css('color','green').text( resp.data.message );
 					} else {
-						$status.css('color','red').text( resp.data && resp.data.message ? resp.data.message : <?php echo wp_json_encode( esc_js( __( 'Save failed.', 'woocommerce-ideaerp' ) ) ); ?> );
-					}
-					setTimeout(function(){ $status.text(''); }, 4000);
-				});
+					$status.css('color','red').text( resp.data && resp.data.message ? resp.data.message : <?php echo wp_json_encode( esc_js( __( 'Zapis nie powiódł się.', 'woocommerce-ideaerp' ) ) ); ?> );
+				}
+				setTimeout(function(){ $status.text(''); }, 4000);
 			});
-		}(jQuery));
-		</script>
-		<?php
+		});
+	}(jQuery));
+	</script>
+	<?php
 	}
 
 	/**
@@ -654,15 +654,15 @@ class SettingsPage {
 		$ajax_url     = admin_url( 'admin-ajax.php' );
 		?>
 		<hr style="margin:30px 0;" />
-		<h2><?php esc_html_e( 'Carrier Mapping', 'woocommerce-ideaerp' ); ?></h2>
-		<p><?php esc_html_e( 'Map each WooCommerce shipping method to an IdeaERP carrier. The mapped carrier will be sent when an order using that shipping method is exported.', 'woocommerce-ideaerp' ); ?></p>
+		<h2><?php esc_html_e( 'Mapowanie przewoźników', 'woocommerce-ideaerp' ); ?></h2>
+		<p><?php esc_html_e( 'Przypisz każdą metodę dostawy WooCommerce do przewoźnika IdeaERP. Przypisany przewoźnik zostanie wysłany podczas eksportu zamówienia z tą metodą dostawy.', 'woocommerce-ideaerp' ); ?></p>
 
 		<div id="wideaerp-cr-map-wrap">
 			<table class="widefat striped" id="wideaerp-cr-map-table" style="max-width:700px;">
 				<thead>
 					<tr>
-						<th><?php esc_html_e( 'WooCommerce Shipping Method', 'woocommerce-ideaerp' ); ?></th>
-						<th><?php esc_html_e( 'IdeaERP Carrier', 'woocommerce-ideaerp' ); ?></th>
+					<th><?php esc_html_e( 'Metoda dostawy WooCommerce', 'woocommerce-ideaerp' ); ?></th>
+					<th><?php esc_html_e( 'Przewoźnik IdeaERP', 'woocommerce-ideaerp' ); ?></th>
 					</tr>
 				</thead>
 				<tbody>
@@ -677,17 +677,17 @@ class SettingsPage {
 								        data-wc-id="<?php echo esc_attr( $method_id ); ?>"
 								        data-saved="<?php echo esc_attr( $saved_map[ $method_id ] ?? '' ); ?>"
 								        style="min-width:220px;">
-									<option value=""><?php esc_html_e( '— loading… —', 'woocommerce-ideaerp' ); ?></option>
-								</select>
-							</td>
-						</tr>
-					<?php endforeach; ?>
-				</tbody>
-			</table>
+								<option value=""><?php esc_html_e( '— ładowanie… —', 'woocommerce-ideaerp' ); ?></option>
+							</select>
+						</td>
+					</tr>
+				<?php endforeach; ?>
+			</tbody>
+		</table>
 
-			<p style="margin-top:12px;">
-				<button type="button" id="wideaerp-cr-map-save" class="button button-primary">
-					<?php esc_html_e( 'Save Mapping', 'woocommerce-ideaerp' ); ?>
+		<p style="margin-top:12px;">
+			<button type="button" id="wideaerp-cr-map-save" class="button button-primary">
+				<?php esc_html_e( 'Zapisz mapowanie', 'woocommerce-ideaerp' ); ?>
 				</button>
 				<span id="wideaerp-cr-map-status" style="margin-left:12px;"></span>
 			</p>
@@ -702,15 +702,15 @@ class SettingsPage {
 			// Fetch ERP carriers once and populate all selects.
 			$.post( ajaxUrl, { action: 'wideaerp_fetch_erp_carriers', nonce: nonce }, function( resp ) {
 				if ( ! resp.success ) {
-					$selects.html('<option value="">' + ( resp.data && resp.data.message ? resp.data.message : <?php echo wp_json_encode( esc_js( __( 'Error loading carriers', 'woocommerce-ideaerp' ) ) ); ?> ) + '</option>');
+					$selects.html('<option value="">' + ( resp.data && resp.data.message ? resp.data.message : <?php echo wp_json_encode( esc_js( __( 'Błąd ładowania przewoźników', 'woocommerce-ideaerp' ) ) ); ?> ) + '</option>');
 					return;
 				}
 				var carriers = resp.data;
 				$selects.each(function(){
 					var $sel  = $(this);
 					var saved = $sel.data('saved');
-					var html  = '<option value=""><?php echo esc_js( __( '— not mapped —', 'woocommerce-ideaerp' ) ); ?></option>';
-					$.each( carriers, function( i, c ){
+				var html  = '<option value=""><?php echo esc_js( __( '— nie przypisano —', 'woocommerce-ideaerp' ) ); ?></option>';
+				$.each( carriers, function( i, c ){
 						var label = c.name + ( c.logistic_company ? ' (' + c.logistic_company + ')' : '' );
 						var sel   = ( String(saved) === String(c.id) ) ? ' selected' : '';
 						html += '<option value="' + c.id + '"' + sel + '>' + $('<span>').text(label).html() + '</option>';
@@ -729,28 +729,28 @@ class SettingsPage {
 				});
 
 				var $btn    = $(this).prop('disabled', true);
-				var $status = $('#wideaerp-cr-map-status').text( <?php echo wp_json_encode( esc_js( __( 'Saving…', 'woocommerce-ideaerp' ) ) ); ?> );
+				var $status = $('#wideaerp-cr-map-status').text( <?php echo wp_json_encode( esc_js( __( 'Zapisywanie…', 'woocommerce-ideaerp' ) ) ); ?> );
 
 				$.post( ajaxUrl, { action: 'wideaerp_save_carrier_map', nonce: nonce, map: map }, function( resp ){
 					$btn.prop('disabled', false);
 					if ( resp.success ) {
 						$status.css('color','green').text( resp.data.message );
 					} else {
-						$status.css('color','red').text( resp.data && resp.data.message ? resp.data.message : <?php echo wp_json_encode( esc_js( __( 'Save failed.', 'woocommerce-ideaerp' ) ) ); ?> );
-					}
-					setTimeout(function(){ $status.text(''); }, 4000);
-				});
+					$status.css('color','red').text( resp.data && resp.data.message ? resp.data.message : <?php echo wp_json_encode( esc_js( __( 'Zapis nie powiódł się.', 'woocommerce-ideaerp' ) ) ); ?> );
+				}
+				setTimeout(function(){ $status.text(''); }, 4000);
 			});
-		}(jQuery));
-		</script>
-		<?php
+		});
+	}(jQuery));
+	</script>
+	<?php
 	}
 
 	public function add_action_links( array $links ): array {
 		$settings_link = sprintf(
 			'<a href="%s">%s</a>',
 			esc_url( admin_url( 'options-general.php?page=' . self::MENU_SLUG ) ),
-			esc_html__( 'Settings', 'woocommerce-ideaerp' )
+			esc_html__( 'Ustawienia', 'woocommerce-ideaerp' )
 		);
 		array_unshift( $links, $settings_link );
 		return $links;
