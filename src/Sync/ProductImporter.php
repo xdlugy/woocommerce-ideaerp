@@ -52,7 +52,7 @@ class ProductImporter {
 	 * @param  ErpProduct[] $variants  All variants sharing the same product_tmpl_id.
 	 * @return array{ id: int, action: string, error?: string }
 	 */
-	public function import_variable_from_variants( array $variants ): array {
+	public function import_variable_from_variants( array $variants, ?int $default_variant_erp_id = null ): array {
 		if ( empty( $variants ) ) {
 			return [ 'id' => 0, 'action' => 'error', 'error' => 'No variants provided.' ];
 		}
@@ -212,6 +212,11 @@ class ProductImporter {
 				$tmpl_id
 			) );
 			$this->handle_images( $saved_id, $images );
+
+			// Set WooCommerce default variation if the caller specified one.
+			if ( $default_variant_erp_id !== null ) {
+				$this->apply_default_attributes( $saved_id, $default_variant_erp_id );
+			}
 
 			// Recalculate min/max price from variations.
 			\WC_Product_Variable::sync( $saved_id );
@@ -635,6 +640,48 @@ class ProductImporter {
 		] );
 
 		return ! empty( $posts ) ? (int) $posts[0] : null;
+	}
+
+	/**
+	 * Read the saved variation's attributes and write them as the parent's
+	 * WooCommerce default variation (pre-selects attribute dropdowns on the
+	 * product page).
+	 */
+	private function apply_default_attributes( int $parent_id, int $default_erp_id ): void {
+		$variation_id = $this->find_variation_by_erp_id( $default_erp_id );
+
+		if ( ! $variation_id ) {
+			Logger::warning( sprintf(
+				'apply_default_attributes: no variation found for erp_id=%d — default not set',
+				$default_erp_id
+			) );
+			return;
+		}
+
+		$variation = wc_get_product( $variation_id );
+		if ( ! $variation instanceof \WC_Product_Variation ) {
+			return;
+		}
+
+		// get_attributes() on a variation returns taxonomy_slug => term_slug,
+		// which is exactly the format set_default_attributes() expects.
+		$default_attrs = $variation->get_attributes( 'edit' );
+
+		$parent = wc_get_product( $parent_id );
+		if ( ! $parent instanceof \WC_Product_Variable ) {
+			return;
+		}
+
+		$parent->set_default_attributes( $default_attrs );
+		$parent->save();
+
+		Logger::debug( sprintf(
+			'apply_default_attributes: WC #%d default set from variation #%d (erp_id=%d): %s',
+			$parent_id,
+			$variation_id,
+			$default_erp_id,
+			wp_json_encode( $default_attrs )
+		) );
 	}
 
 	// -------------------------------------------------------------------------

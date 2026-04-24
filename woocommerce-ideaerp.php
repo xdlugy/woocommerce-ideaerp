@@ -95,6 +95,9 @@ final class WooCommerce_IdeaERP {
 		$invoice_importer = new \WooIdeaERP\Sync\InvoiceImporter();
 		$invoice_importer->register_hooks();
 
+		// Step 4: scheduled stock and price sync from IdeaERP to WooCommerce.
+		( new \WooIdeaERP\Sync\StockPriceSyncer() )->register_hooks();
+
 		// Frontend: swap gallery images when a variation is selected.
 		( new \WooIdeaERP\Frontend\VariationGallery() )->register();
 	}

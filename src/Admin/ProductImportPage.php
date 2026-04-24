@@ -164,9 +164,23 @@ class ProductImportPage {
 			const nonce   = <?php echo wp_json_encode( wp_create_nonce( 'wideaerp_nonce' ) ); ?>;
 			const ajaxUrl = <?php echo wp_json_encode( admin_url( 'admin-ajax.php' ) ); ?>;
 
-			let allProducts = [];
-			let groupCounter = 0;
-			let draggedItem  = null;
+		let allProducts = [];
+		let groupCounter = 0;
+		let draggedItem  = null;
+
+		function refreshDefaultSelect(zoneEl, selectEl) {
+			const prev = selectEl.value;
+			while (selectEl.options.length > 1) { selectEl.remove(1); }
+			zoneEl.querySelectorAll('.wideaerp-draggable-item').forEach(function(item) {
+				const erpId = item.dataset.erpId;
+				const sku   = item.querySelector('strong') ? item.querySelector('strong').textContent : erpId;
+				const opt   = document.createElement('option');
+				opt.value       = erpId;
+				opt.textContent = sku;
+				if (String(erpId) === String(prev)) { opt.selected = true; }
+				selectEl.appendChild(opt);
+			});
+		}
 
 			// ----------------------------------------------------------------
 			// Notices & helpers
@@ -393,11 +407,23 @@ class ProductImportPage {
 					$box.remove();
 				});
 				$header.append($nameInput).append($del);
-				const $zone = $('<div class="wideaerp-group-zone" id="' + gid + '"></div>');
-				makeDropZone($zone);
-				$box.append($header).append($zone);
-				$('#wideaerp-custom-groups').append($box);
-				return $zone;
+			const $zone = $('<div class="wideaerp-group-zone" id="' + gid + '"></div>');
+			makeDropZone($zone);
+
+			const $defaultWrap   = $('<div style="padding:6px 8px 8px;border-top:1px solid #eee;background:#fafafa;font-size:12px;"></div>');
+			const $defaultLabel  = $('<label style="display:block;margin-bottom:4px;color:#666;"><?php echo esc_js( __( 'Default variation:', 'woocommerce-ideaerp' ) ); ?></label>');
+			const $defaultSelect = $('<select class="wideaerp-default-variation" style="width:100%;max-width:400px;"><option value=""><?php echo esc_js( __( '— No default —', 'woocommerce-ideaerp' ) ); ?></option></select>');
+			$defaultWrap.append($defaultLabel).append($defaultSelect);
+
+			// Keep the select in sync whenever items are dragged in or out.
+			const zoneObserver = new MutationObserver(function() {
+				refreshDefaultSelect($zone[0], $defaultSelect[0]);
+			});
+			zoneObserver.observe($zone[0], { childList: true });
+
+			$box.append($header).append($zone).append($defaultWrap);
+			$('#wideaerp-custom-groups').append($box);
+			return $zone;
 			}
 
 			$('#wideaerp-add-group').on('click', function() {
@@ -465,9 +491,10 @@ class ProductImportPage {
 					$(this).find('.wideaerp-draggable-item').each(function() {
 						ids.push($(this).data('erp-id'));
 					});
-					if (ids.length < 2) return; // not enough to form a group
+				if (ids.length < 2) return; // not enough to form a group
 
-					const groupKey = 'custom_group:' + ids.join(',');
+				const defaultErpId = $(this).find('.wideaerp-default-variation').val();
+				const groupKey = 'custom_group:' + ids.join(',') + (defaultErpId ? ';default:' + defaultErpId : '');
 
 					// Update the checkbox of the first product in the group to carry
 					// the combined key; uncheck the rest so they don't import twice.
@@ -714,10 +741,18 @@ class ProductImportPage {
 						'error'  => $result['error'] ?? null,
 					];
 
-				} elseif ( str_starts_with( $key, 'custom_group:' ) ) {
-					// Manually grouped variants from the "Group Variants" modal.
-					// Key format: custom_group:erp_id1,erp_id2,...
-					$erp_ids  = array_map( 'intval', explode( ',', substr( $key, 13 ) ) );
+			} elseif ( str_starts_with( $key, 'custom_group:' ) ) {
+				// Manually grouped variants from the "Group Variants" modal.
+				// Key format: custom_group:erp_id1,erp_id2,...[;default:erp_id]
+				$payload        = substr( $key, 13 );
+				$default_erp_id = null;
+				if ( str_contains( $payload, ';default:' ) ) {
+					[ $ids_part, $default_part ] = explode( ';default:', $payload, 2 );
+					$default_erp_id = ( (int) $default_part ) ?: null;
+				} else {
+					$ids_part = $payload;
+				}
+				$erp_ids  = array_map( 'intval', explode( ',', $ids_part ) );
 					$variants = array_values( array_filter(
 						array_map( fn( int $id ) => $by_id[ $id ] ?? null, $erp_ids )
 					) );
@@ -729,21 +764,21 @@ class ProductImportPage {
 						count( $variants )
 					) );
 
-					if ( count( $variants ) < 2 ) {
-						$results[] = [
-							'sku'    => implode( ',', $erp_ids ),
-							'action' => '',
-							'error'  => __( 'Custom group requires at least 2 products.', 'woocommerce-ideaerp' ),
-						];
-						continue;
-					}
-
-					$result    = $importer->import_variable_from_variants( $variants );
+				if ( count( $variants ) < 2 ) {
 					$results[] = [
-						'sku'    => implode( ', ', array_map( fn( ErpProduct $v ) => $v->default_code, $variants ) ),
-						'action' => $result['action'],
-						'error'  => $result['error'] ?? null,
+						'sku'    => implode( ',', $erp_ids ),
+						'action' => '',
+						'error'  => __( 'Custom group requires at least 2 products.', 'woocommerce-ideaerp' ),
 					];
+					continue;
+				}
+
+				$result    = $importer->import_variable_from_variants( $variants, $default_erp_id );
+				$results[] = [
+					'sku'    => implode( ', ', array_map( fn( ErpProduct $v ) => $v->default_code, $variants ) ),
+					'action' => $result['action'],
+					'error'  => $result['error'] ?? null,
+				];
 				}
 			}
 

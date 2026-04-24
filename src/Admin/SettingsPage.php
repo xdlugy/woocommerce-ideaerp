@@ -6,6 +6,7 @@ use WooIdeaERP\Api\Client;
 use WooIdeaERP\Api\Endpoints\CarriersEndpoint;
 use WooIdeaERP\Api\Endpoints\PaymentMethodsEndpoint;
 use WooIdeaERP\Api\Endpoints\PricelistsEndpoint;
+use WooIdeaERP\Sync\StockPriceSyncer;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -67,6 +68,26 @@ class SettingsPage {
 
 		add_settings_field( 'wideaerp_order_trigger_status', __( 'Export trigger status', 'woocommerce-ideaerp' ),
 			[ $this, 'field_order_trigger_status' ], 'wideaerp_tab_orders', 'wideaerp_orders_section' );
+
+		// --- Stock & Price Sync section (Orders tab) ---
+		register_setting( 'wideaerp_orders_group', StockPriceSyncer::OPT_STOCK_INTERVAL, [ 'sanitize_callback' => 'absint', 'default' => 60 ] );
+		register_setting( 'wideaerp_orders_group', StockPriceSyncer::OPT_PRICE_INTERVAL, [ 'sanitize_callback' => 'absint', 'default' => 60 ] );
+		register_setting( 'wideaerp_orders_group', StockPriceSyncer::OPT_BATCH_SIZE,     [ 'sanitize_callback' => 'absint', 'default' => 100 ] );
+		register_setting( 'wideaerp_orders_group', StockPriceSyncer::OPT_BATCH_DELAY,    [ 'sanitize_callback' => 'absint', 'default' => 30 ] );
+
+		add_settings_section( 'wideaerp_sync_section', __( 'Stock & Price Sync', 'woocommerce-ideaerp' ), [ $this, 'sync_section_description' ], 'wideaerp_tab_orders' );
+
+		add_settings_field( StockPriceSyncer::OPT_STOCK_INTERVAL, __( 'Stock sync interval (minutes)', 'woocommerce-ideaerp' ),
+			[ $this, 'field_stock_sync_interval' ], 'wideaerp_tab_orders', 'wideaerp_sync_section' );
+
+		add_settings_field( StockPriceSyncer::OPT_PRICE_INTERVAL, __( 'Price sync interval (minutes)', 'woocommerce-ideaerp' ),
+			[ $this, 'field_price_sync_interval' ], 'wideaerp_tab_orders', 'wideaerp_sync_section' );
+
+		add_settings_field( StockPriceSyncer::OPT_BATCH_SIZE, __( 'Products per batch', 'woocommerce-ideaerp' ),
+			[ $this, 'field_sync_batch_size' ], 'wideaerp_tab_orders', 'wideaerp_sync_section' );
+
+		add_settings_field( StockPriceSyncer::OPT_BATCH_DELAY, __( 'Delay between batches (seconds)', 'woocommerce-ideaerp' ),
+			[ $this, 'field_sync_batch_delay' ], 'wideaerp_tab_orders', 'wideaerp_sync_section' );
 	}
 
 	// -------------------------------------------------------------------------
@@ -75,6 +96,10 @@ class SettingsPage {
 
 	public function orders_section_description(): void {
 		echo '<p>' . esc_html__( 'Configure when WooCommerce orders are pushed to IdeaERP.', 'woocommerce-ideaerp' ) . '</p>';
+	}
+
+	public function sync_section_description(): void {
+		echo '<p>' . esc_html__( 'IdeaERP stock and price are downloaded once per interval and applied to WooCommerce in staggered batches. Only products whose values changed are saved.', 'woocommerce-ideaerp' ) . '</p>';
 	}
 
 	// -------------------------------------------------------------------------
@@ -110,6 +135,46 @@ class SettingsPage {
 			<p class="description">%s</p>',
 			esc_attr( get_option( 'wideaerp_integration_config', '' ) ),
 			esc_html__( 'The integration_config integer assigned to this WooCommerce store in IdeaERP. Leave 0 if unknown.', 'woocommerce-ideaerp' )
+		);
+	}
+
+	public function field_stock_sync_interval(): void {
+		printf(
+			'<input type="number" id="%1$s" name="%1$s" value="%2$s" class="small-text" min="1" />
+			<p class="description">%3$s</p>',
+			esc_attr( StockPriceSyncer::OPT_STOCK_INTERVAL ),
+			esc_attr( get_option( StockPriceSyncer::OPT_STOCK_INTERVAL, 60 ) ),
+			esc_html__( 'How often to download stock quantities from IdeaERP and update WooCommerce. Default: 60.', 'woocommerce-ideaerp' )
+		);
+	}
+
+	public function field_price_sync_interval(): void {
+		printf(
+			'<input type="number" id="%1$s" name="%1$s" value="%2$s" class="small-text" min="1" />
+			<p class="description">%3$s</p>',
+			esc_attr( StockPriceSyncer::OPT_PRICE_INTERVAL ),
+			esc_attr( get_option( StockPriceSyncer::OPT_PRICE_INTERVAL, 60 ) ),
+			esc_html__( 'How often to download prices from IdeaERP and update WooCommerce. Default: 60.', 'woocommerce-ideaerp' )
+		);
+	}
+
+	public function field_sync_batch_size(): void {
+		printf(
+			'<input type="number" id="%1$s" name="%1$s" value="%2$s" class="small-text" min="1" max="500" />
+			<p class="description">%3$s</p>',
+			esc_attr( StockPriceSyncer::OPT_BATCH_SIZE ),
+			esc_attr( get_option( StockPriceSyncer::OPT_BATCH_SIZE, 100 ) ),
+			esc_html__( 'Number of products processed per batch job. Default: 100.', 'woocommerce-ideaerp' )
+		);
+	}
+
+	public function field_sync_batch_delay(): void {
+		printf(
+			'<input type="number" id="%1$s" name="%1$s" value="%2$s" class="small-text" min="0" />
+			<p class="description">%3$s</p>',
+			esc_attr( StockPriceSyncer::OPT_BATCH_DELAY ),
+			esc_attr( get_option( StockPriceSyncer::OPT_BATCH_DELAY, 30 ) ),
+			esc_html__( 'Seconds to wait between dispatching each batch job. Increase to reduce DB load spikes. Default: 30.', 'woocommerce-ideaerp' )
 		);
 	}
 
