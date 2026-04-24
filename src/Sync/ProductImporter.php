@@ -59,55 +59,27 @@ class ProductImporter {
 
 		try {
 			$representative = $variants[0];
-			$tmpl_id        = $representative->product_tmpl_id;
+		$tmpl_id        = $representative->product_tmpl_id;
 
-			Logger::debug( sprintf(
-				'import_variable_from_variants: START tmpl_id=%d, %d variants: %s',
-				$tmpl_id,
-				count( $variants ),
-				implode( ', ', array_map( fn( $v ) => $v->default_code . '(id=' . $v->id . ')', $variants ) )
-			) );
-
-			// Find existing WC variable product by template ID meta.
-			$wc_id = $this->find_wc_product_id_by_tmpl( $tmpl_id );
-
-			Logger::debug( sprintf(
-				'import_variable_from_variants: existing WC product by tmpl meta = %s',
-				$wc_id ? '#' . $wc_id : 'none'
-			) );
+		// Find existing WC variable product by template ID meta.
+		$wc_id = $this->find_wc_product_id_by_tmpl( $tmpl_id );
 
 			/** @var \WC_Product_Variable $wc_product */
 			$wc_product = $wc_id
 				? wc_get_product( $wc_id )
 				: new \WC_Product_Variable();
 
-			if ( ! $wc_product instanceof \WC_Product_Variable ) {
-				Logger::debug( sprintf(
-					'import_variable_from_variants: WC product #%d is not WC_Product_Variable (type=%s), creating new',
-					$wc_id,
-					get_class( $wc_product )
-				) );
-				$wc_product = new \WC_Product_Variable();
-			}
+		if ( ! $wc_product instanceof \WC_Product_Variable ) {
+			$wc_product = new \WC_Product_Variable();
+		}
 
-			$action = $wc_product->get_id() ? 'updated' : 'created';
-
-			Logger::debug( sprintf(
-				'import_variable_from_variants: action=%s, parent WC id=%d',
-				$action,
-				$wc_product->get_id()
-			) );
+		$action = $wc_product->get_id() ? 'updated' : 'created';
 
 			// Parent title: strip width/colour tail so the variable product reads
 			// e.g. "COMO Ława" not "COMO Ława 75 dąb artisan".
 			$parent_name = $this->variable_product_base_name( $representative->name );
-			$wc_product->set_name( $parent_name );
-			Logger::debug( sprintf(
-				'import_variable_from_variants: parent name "%s" (from variant name "%s")',
-				$parent_name,
-				$representative->name
-			) );
-			$wc_product->set_status( 'draft' );
+		$wc_product->set_name( $parent_name );
+		$wc_product->set_status( 'draft' );
 			$wc_product->set_catalog_visibility( 'visible' );
 			$wc_product->set_weight( (string) $representative->weight );
 
@@ -115,14 +87,9 @@ class ProductImporter {
 
 			// Collect all unique attribute name→values across all variants
 			// so the parent product declares the full set of options.
-			$all_attr_options = $this->collect_attribute_options( $variants );
+		$all_attr_options = $this->collect_attribute_options( $variants );
 
-			Logger::debug( sprintf(
-				'import_variable_from_variants: collected attribute options: %s',
-				wp_json_encode( $all_attr_options )
-			) );
-
-			// Ensure every attribute exists as a global WC taxonomy (pa_*)
+		// Ensure every attribute exists as a global WC taxonomy (pa_*)
 			// and every value exists as a term under that taxonomy.
 			// Returns a map of  attribute_name => taxonomy_slug  (e.g. "kolor" => "pa_kolor").
 			$taxonomy_map  = [];
@@ -158,17 +125,8 @@ class ProductImporter {
 				$attr->set_options( $term_ids );
 				$attr->set_visible( true );
 				$attr->set_variation( true );
-				$wc_attributes[] = $attr;
-
-				Logger::debug( sprintf(
-					'import_variable_from_variants: global attribute "%s" (taxonomy="%s", id=%d) with %d term(s): %s',
-					$attr_name,
-					$taxonomy,
-					$attr_id,
-					count( $term_ids ),
-					implode( ', ', $options )
-				) );
-			}
+			$wc_attributes[] = $attr;
+		}
 
 			if ( empty( $wc_attributes ) ) {
 				Logger::warning( sprintf(
@@ -179,14 +137,9 @@ class ProductImporter {
 
 			$wc_product->set_attributes( $wc_attributes );
 
-			$saved_id = $wc_product->save();
+		$saved_id = $wc_product->save();
 
-			Logger::debug( sprintf(
-				'import_variable_from_variants: parent product saved as WC #%d',
-				$saved_id
-			) );
-
-			// Parent SKU: not in the ERP API — always assign a WooCommerce-generated parent SKU when empty or legacy-prefixed.
+		// Parent SKU: not in the ERP API — always assign a WooCommerce-generated parent SKU when empty or legacy-prefixed.
 			// Variations use ERP default_code; the variable parent never clears its SKU on re-import.
 			$this->maybe_apply_wc_default_parent_sku( $wc_product, $saved_id );
 
@@ -194,24 +147,14 @@ class ProductImporter {
 			update_post_meta( $saved_id, self::ERP_TMPL_ID_META, $tmpl_id );
 
 			// Create/update one WC variation per ERP variant record.
-			foreach ( $variants as $variant ) {
-				Logger::debug( sprintf(
-					'import_variable_from_variants: syncing variation for erp_id=%d sku="%s"',
-					$variant->id,
-					$variant->default_code
-				) );
-				$this->sync_single_variation( $saved_id, $variant, $all_attr_options, $taxonomy_map );
-			}
+		foreach ( $variants as $variant ) {
+			$this->sync_single_variation( $saved_id, $variant, $all_attr_options, $taxonomy_map );
+		}
 
 			// The list endpoint returns images:[] for all products.
 			// Fetch the full image list via a dedicated single-template request.
-			$images = $this->products_endpoint->get_images_by_tmpl_id( $tmpl_id );
-			Logger::debug( sprintf(
-				'import_variable_from_variants: fetched %d image(s) for tmpl_id=%d',
-				count( $images ),
-				$tmpl_id
-			) );
-			$this->handle_images( $saved_id, $images );
+		$images = $this->products_endpoint->get_images_by_tmpl_id( $tmpl_id );
+		$this->handle_images( $saved_id, $images );
 
 			// Set WooCommerce default variation if the caller specified one.
 			if ( $default_variant_erp_id !== null ) {
