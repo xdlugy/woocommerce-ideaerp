@@ -201,7 +201,9 @@ class StockPriceSyncer {
 				continue;
 			}
 
-			if ( (float) $wc->get_stock_quantity() === $new_qty ) {
+			$current_qty = $wc->get_stock_quantity();
+			if ( $wc->get_manage_stock() && $current_qty !== null
+				&& abs( (float) $current_qty - $new_qty ) < 0.0001 ) {
 				continue;
 			}
 
@@ -231,6 +233,7 @@ class StockPriceSyncer {
 
 		$wc_posts = $this->find_wc_posts_by_erp_ids( $erp_ids );
 		$updated  = 0;
+		$decimals = function_exists( 'wc_get_price_decimals' ) ? wc_get_price_decimals() : 2;
 
 		foreach ( $wc_posts as $wc_id ) {
 			$erp_id = (int) get_post_meta( $wc_id, self::ERP_ID_META, true );
@@ -238,13 +241,17 @@ class StockPriceSyncer {
 				continue;
 			}
 
-			$new_price = (string) $data[ $erp_id ];
-			$wc        = wc_get_product( $wc_id );
+			$wc = wc_get_product( $wc_id );
 			if ( ! $wc ) {
 				continue;
 			}
 
-			if ( $wc->get_regular_price() === $new_price ) {
+			// Normalize both sides through wc_format_decimal so ERP's 19.0 compares
+			// equal to WC's stored "19.00" and we don't rewrite every product every run.
+			$new_price     = wc_format_decimal( (float) $data[ $erp_id ], $decimals );
+			$current_price = wc_format_decimal( (string) $wc->get_regular_price(), $decimals );
+
+			if ( $current_price === $new_price ) {
 				continue;
 			}
 
@@ -308,10 +315,13 @@ class StockPriceSyncer {
 		}
 
 		return get_posts( [
-			'post_type'      => [ 'product', 'product_variation' ],
-			'posts_per_page' => -1,
-			'fields'         => 'ids',
-			'meta_query'     => [ [
+			'post_type'              => [ 'product', 'product_variation' ],
+			'posts_per_page'         => -1,
+			'fields'                 => 'ids',
+			'no_found_rows'          => true,
+			'update_post_meta_cache' => false,
+			'update_post_term_cache' => false,
+			'meta_query'             => [ [
 				'key'     => self::ERP_ID_META,
 				'value'   => $erp_ids,
 				'compare' => 'IN',

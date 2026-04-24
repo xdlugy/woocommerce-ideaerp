@@ -46,9 +46,20 @@ class ProductsEndpoint {
 		$offset = 0;
 
 		do {
-			$page    = $this->get_page( $offset );
+			$page  = $this->get_page( $offset );
+			$count = count( $page['products'] );
+
+			if ( $count === 0 ) {
+				break; // empty page — stop regardless of reported total_count
+			}
+
 			$all     = array_merge( $all, $page['products'] );
 			$offset += self::PAGE_LIMIT;
+
+			// Short page means no more results, even if total_count disagrees.
+			if ( $count < self::PAGE_LIMIT ) {
+				break;
+			}
 		} while ( count( $all ) < $page['total_count'] );
 
 		return $all;
@@ -110,6 +121,21 @@ class ProductsEndpoint {
 		}
 
 		return array_filter( (array) ( $products[0]['images'] ?? [] ) );
+	}
+
+	/**
+	 * Fetch every variant of a product template fully hydrated (images, barcode,
+	 * descriptions). One API call replaces N per-variant calls during import.
+	 *
+	 * @return ErpProduct[]
+	 */
+	public function get_by_tmpl_id( int $tmpl_id ): array {
+		$data = $this->client->get( self::PATH, [ 'product_tmpl_id' => $tmpl_id ] );
+
+		return array_map(
+			fn( array $p ) => ErpProduct::from_array( $p ),
+			$data['products'] ?? []
+		);
 	}
 
 	/**

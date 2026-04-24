@@ -38,6 +38,11 @@ class PaymentMethodsEndpoint {
 				'active' => 'true',
 			] );
 			$items = $data['payment_methods'] ?? [];
+			$count = count( $items );
+
+			if ( $count === 0 ) {
+				break;
+			}
 
 			foreach ( $items as $row ) {
 				$results[] = ErpPaymentMethod::from_array( $row );
@@ -45,6 +50,10 @@ class PaymentMethodsEndpoint {
 
 			$total  = (int) ( $data['total_count'] ?? count( $results ) );
 			$offset += self::LIMIT;
+
+			if ( $count < self::LIMIT ) {
+				break;
+			}
 		} while ( count( $results ) < $total );
 
 		return $results;

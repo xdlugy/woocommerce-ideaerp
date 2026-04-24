@@ -38,6 +38,11 @@ class CarriersEndpoint {
 				'active' => 'true',
 			] );
 			$items = $data['shipment_carriers'] ?? [];
+			$count = count( $items );
+
+			if ( $count === 0 ) {
+				break;
+			}
 
 			foreach ( $items as $row ) {
 				$results[] = ErpCarrier::from_array( $row );
@@ -45,6 +50,10 @@ class CarriersEndpoint {
 
 			$total  = (int) ( $data['total_count'] ?? count( $results ) );
 			$offset += self::LIMIT;
+
+			if ( $count < self::LIMIT ) {
+				break;
+			}
 		} while ( count( $results ) < $total );
 
 		return $results;

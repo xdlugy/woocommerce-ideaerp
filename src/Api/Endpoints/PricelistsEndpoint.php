@@ -38,6 +38,11 @@ class PricelistsEndpoint {
 				'active' => 'true',
 			] );
 			$items = $data['pricelists'] ?? [];
+			$count = count( $items );
+
+			if ( $count === 0 ) {
+				break;
+			}
 
 			foreach ( $items as $row ) {
 				$results[] = ErpPricelist::from_array( $row );
@@ -45,6 +50,10 @@ class PricelistsEndpoint {
 
 			$total  = (int) ( $data['total_count'] ?? count( $results ) );
 			$offset += self::LIMIT;
+
+			if ( $count < self::LIMIT ) {
+				break;
+			}
 		} while ( count( $results ) < $total );
 
 		return $results;

@@ -189,7 +189,8 @@ class ProductImportPage {
 			function showNotice(message, type) {
 				$('#wideaerp-import-notice')
 					.attr('class', 'notice notice-' + type + ' inline')
-					.html('<p>' + message + '</p>')
+					.empty()
+					.append($('<p>').text(message))
 					.show();
 			}
 
@@ -804,10 +805,13 @@ class ProductImportPage {
 
 	private function find_wc_id_by_erp_meta( int $erp_id ): ?int {
 		$posts = get_posts( [
-			'post_type'      => 'product',
-			'posts_per_page' => 1,
-			'fields'         => 'ids',
-			'meta_query'     => [ [
+			'post_type'              => 'product',
+			'posts_per_page'         => 1,
+			'fields'                 => 'ids',
+			'no_found_rows'          => true,
+			'update_post_meta_cache' => false,
+			'update_post_term_cache' => false,
+			'meta_query'             => [ [
 				'key'   => '_erp_product_id',
 				'value' => $erp_id,
 			] ],
@@ -821,10 +825,13 @@ class ProductImportPage {
 	 */
 	private function find_wc_id_by_erp_tmpl_meta( int $tmpl_id ): ?int {
 		$posts = get_posts( [
-			'post_type'      => 'product',
-			'posts_per_page' => 1,
-			'fields'         => 'ids',
-			'meta_query'     => [ [
+			'post_type'              => 'product',
+			'posts_per_page'         => 1,
+			'fields'                 => 'ids',
+			'no_found_rows'          => true,
+			'update_post_meta_cache' => false,
+			'update_post_term_cache' => false,
+			'meta_query'             => [ [
 				'key'   => '_erp_product_tmpl_id',
 				'value' => $tmpl_id,
 			] ],

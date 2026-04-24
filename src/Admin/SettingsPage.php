@@ -240,12 +240,13 @@ class SettingsPage {
 			wp_send_json_error( [ 'message' => __( 'Niewystarczające uprawnienia.', 'woocommerce-ideaerp' ) ], 403 );
 		}
 
-		$raw = isset( $_POST['map'] ) && is_array( $_POST['map'] ) ? $_POST['map'] : []; // phpcs:ignore WordPress.Security.NonceVerification
-		$map = [];
+		$raw            = isset( $_POST['map'] ) && is_array( $_POST['map'] ) ? $_POST['map'] : []; // phpcs:ignore WordPress.Security.NonceVerification
+		$map            = [];
+		$allowed_ids    = array_keys( WC()->payment_gateways()->payment_gateways() );
 		foreach ( $raw as $wc_id => $erp_id ) {
-			$wc_id  = sanitize_key( $wc_id );
+			$wc_id  = wp_unslash( (string) $wc_id );
 			$erp_id = absint( $erp_id );
-			if ( $wc_id ) {
+			if ( in_array( $wc_id, $allowed_ids, true ) ) {
 				$map[ $wc_id ] = $erp_id;
 			}
 		}
@@ -293,12 +294,13 @@ class SettingsPage {
 			wp_send_json_error( [ 'message' => __( 'Niewystarczające uprawnienia.', 'woocommerce-ideaerp' ) ], 403 );
 		}
 
-		$raw = isset( $_POST['map'] ) && is_array( $_POST['map'] ) ? $_POST['map'] : []; // phpcs:ignore WordPress.Security.NonceVerification
-		$map = [];
+		$raw             = isset( $_POST['map'] ) && is_array( $_POST['map'] ) ? $_POST['map'] : []; // phpcs:ignore WordPress.Security.NonceVerification
+		$map             = [];
+		$allowed_codes   = array_keys( get_woocommerce_currencies() );
 		foreach ( $raw as $currency => $erp_id ) {
-			$currency = sanitize_text_field( strtoupper( $currency ) );
+			$currency = strtoupper( sanitize_text_field( (string) $currency ) );
 			$erp_id   = absint( $erp_id );
-			if ( $currency ) {
+			if ( in_array( $currency, $allowed_codes, true ) ) {
 				$map[ $currency ] = $erp_id;
 			}
 		}
@@ -349,12 +351,13 @@ class SettingsPage {
 			wp_send_json_error( [ 'message' => __( 'Niewystarczające uprawnienia.', 'woocommerce-ideaerp' ) ], 403 );
 		}
 
-		$raw = isset( $_POST['map'] ) && is_array( $_POST['map'] ) ? $_POST['map'] : []; // phpcs:ignore WordPress.Security.NonceVerification
-		$map = [];
+		$raw         = isset( $_POST['map'] ) && is_array( $_POST['map'] ) ? $_POST['map'] : []; // phpcs:ignore WordPress.Security.NonceVerification
+		$map         = [];
+		$allowed_ids = array_keys( WC()->shipping()->get_shipping_methods() );
 		foreach ( $raw as $wc_id => $erp_id ) {
-			$wc_id  = sanitize_key( $wc_id );
+			$wc_id  = wp_unslash( (string) $wc_id );
 			$erp_id = absint( $erp_id );
-			if ( $wc_id ) {
+			if ( in_array( $wc_id, $allowed_ids, true ) ) {
 				$map[ $wc_id ] = $erp_id;
 			}
 		}

@@ -131,6 +131,16 @@ function wideaerp_init(): void {
 add_action( 'plugins_loaded', 'wideaerp_init' );
 
 /**
+ * Declare HPOS (custom order tables) compatibility so modern WooCommerce doesn't
+ * flag this plugin as incompatible and block the HPOS toggle.
+ */
+add_action( 'before_woocommerce_init', function (): void {
+	if ( class_exists( \Automattic\WooCommerce\Utilities\FeaturesUtil::class ) ) {
+		\Automattic\WooCommerce\Utilities\FeaturesUtil::declare_compatibility( 'custom_order_tables', WIDEAERP_PLUGIN_FILE, true );
+	}
+} );
+
+/**
  * Activation hook.
  */
 function wideaerp_activate(): void {

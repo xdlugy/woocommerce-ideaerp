@@ -21,13 +21,19 @@ defined( 'ABSPATH' ) || exit;
 class OrderExporter {
 
 	private const META_ERP_ORDER_ID = '_erp_order_id';
+	private const ASYNC_ACTION      = 'wideaerp_export_order';
+	private const AS_GROUP          = 'woocommerce-ideaerp';
 
 	public function register_hooks(): void {
 		add_action( 'woocommerce_order_status_changed', [ $this, 'handle' ], 10, 4 );
+		add_action( self::ASYNC_ACTION, [ $this, 'run_async_export' ] );
 	}
 
 	/**
 	 * Called by WooCommerce on every order status transition.
+	 *
+	 * Enqueues an async Action Scheduler job instead of hitting the ERP inline, so
+	 * bulk status changes don't fan out to N synchronous HTTP calls in one request.
 	 *
 	 * @param int       $order_id   WC order ID.
 	 * @param string    $old_status Previous status slug (without "wc-" prefix).
@@ -43,6 +49,29 @@ class OrderExporter {
 
 		if ( $order->get_meta( self::META_ERP_ORDER_ID ) ) {
 			Logger::debug( sprintf( 'OrderExporter: order #%d already pushed (erp_order_id=%s), skipping.', $order_id, $order->get_meta( self::META_ERP_ORDER_ID ) ) );
+			return;
+		}
+
+		if ( function_exists( 'as_enqueue_async_action' ) ) {
+			as_enqueue_async_action( self::ASYNC_ACTION, [ $order_id ], self::AS_GROUP );
+			return;
+		}
+
+		// Fallback when Action Scheduler is unavailable.
+		$this->export( $order );
+	}
+
+	/**
+	 * Async handler invoked by Action Scheduler.
+	 */
+	public function run_async_export( int $order_id ): void {
+		$order = wc_get_order( $order_id );
+		if ( ! $order instanceof \WC_Order ) {
+			Logger::debug( sprintf( 'OrderExporter: order #%d no longer exists, async export skipped.', $order_id ) );
+			return;
+		}
+
+		if ( $order->get_meta( self::META_ERP_ORDER_ID ) ) {
 			return;
 		}
 

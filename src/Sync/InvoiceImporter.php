@@ -51,6 +51,9 @@ class InvoiceImporter {
 		// Register the scheduled action handler.
 		add_action( self::SCHEDULED_ACTION, [ $this, 'run_scheduled_check' ] );
 
+		// Async per-order fetch triggered from handle_status_changed.
+		add_action( 'wideaerp_fetch_invoice_for_order', [ $this, 'run_async_fetch' ] );
+
 		// Schedule the recurring job on init (idempotent — only schedules if not already queued).
 		add_action( 'init', [ $this, 'schedule_recurring_check' ] );
 
@@ -100,6 +103,26 @@ class InvoiceImporter {
 	 */
 	public function handle_status_changed( int $order_id, string $old_status, string $new_status, \WC_Order $order ): void {
 		if ( ! $order->get_meta( self::META_ERP_ORDER_ID ) ) {
+			return;
+		}
+
+		if ( ! $this->is_invoice_pending( $order ) ) {
+			return;
+		}
+
+		// Defer the ERP roundtrip — bulk status changes would otherwise fire N
+		// synchronous HTTP calls in one admin request.
+		if ( function_exists( 'as_enqueue_async_action' ) ) {
+			as_enqueue_async_action( 'wideaerp_fetch_invoice_for_order', [ $order_id ], 'woocommerce-ideaerp' );
+			return;
+		}
+
+		$this->import_for_order( $order );
+	}
+
+	public function run_async_fetch( int $order_id ): void {
+		$order = wc_get_order( $order_id );
+		if ( ! $order instanceof \WC_Order ) {
 			return;
 		}
 
@@ -186,7 +209,7 @@ class InvoiceImporter {
 				return;
 			}
 
-			$this->save_invoices( $order, $invoices, $url, $token );
+			$this->save_invoices( $order, $invoices );
 
 		} catch ( \RuntimeException $e ) {
 			Logger::error( sprintf(
@@ -206,17 +229,14 @@ class InvoiceImporter {
 	 *
 	 * @param \WC_Order    $order
 	 * @param ErpInvoice[] $invoices
-	 * @param string       $erp_url
-	 * @param string       $token
 	 */
-	private function save_invoices( \WC_Order $order, array $invoices, string $erp_url, string $token ): void {
+	private function save_invoices( \WC_Order $order, array $invoices ): void {
 		$existing_count = (int) $order->get_meta( self::META_INVOICE_COUNT );
 		$n              = 0;
 
 		foreach ( $invoices as $invoice ) {
 			$n++;
-			$prefix  = self::META_INVOICE_PREFIX . $n . '_';
-			$pdf_url = InvoicesEndpoint::build_pdf_url( $invoice->id, $erp_url, $token );
+			$prefix = self::META_INVOICE_PREFIX . $n . '_';
 
 			$order->update_meta_data( $prefix . 'id',           $invoice->id );
 			$order->update_meta_data( $prefix . 'number',       $invoice->name );
@@ -225,7 +245,6 @@ class InvoiceImporter {
 			$order->update_meta_data( $prefix . 'amount_total', $invoice->amount_total );
 			$order->update_meta_data( $prefix . 'currency',     $invoice->currency );
 			$order->update_meta_data( $prefix . 'state',        $invoice->state );
-			$order->update_meta_data( $prefix . 'pdf_url',      $pdf_url );
 
 			Logger::debug( sprintf(
 				'InvoiceImporter: saved invoice #%d (%s) to WC order #%d.',
@@ -243,6 +262,14 @@ class InvoiceImporter {
 						$invoice->name
 					)
 				);
+			}
+		}
+
+		// Drop any stale slots from a previous fetch that returned more invoices.
+		for ( $stale = $n + 1; $stale <= $existing_count; $stale++ ) {
+			$stale_prefix = self::META_INVOICE_PREFIX . $stale . '_';
+			foreach ( [ 'id', 'number', 'date', 'date_due', 'amount_total', 'currency', 'state', 'pdf_url' ] as $field ) {
+				$order->delete_meta_data( $stale_prefix . $field );
 			}
 		}
 
@@ -428,6 +455,21 @@ class InvoiceImporter {
 			die( 'Order not found.' );
 		}
 
+		// Confirm the requested invoice is actually attached to this order. The nonce
+		// alone only verifies the admin's session — it doesn't bind invoice → order.
+		$count           = (int) $order->get_meta( self::META_INVOICE_COUNT );
+		$invoice_belongs = false;
+		for ( $n = 1; $n <= $count; $n++ ) {
+			if ( (int) $order->get_meta( self::META_INVOICE_PREFIX . $n . '_id' ) === $invoice_id ) {
+				$invoice_belongs = true;
+				break;
+			}
+		}
+		if ( ! $invoice_belongs ) {
+			status_header( 403 );
+			die( 'Invoice does not belong to this order.' );
+		}
+
 		$url   = get_option( 'wideaerp_erp_url', '' );
 		$token = get_option( 'wideaerp_api_token', '' );
 
@@ -473,17 +515,11 @@ class InvoiceImporter {
 			die( 'Failed to decode PDF data from ERP.' );
 		}
 
-		// Find the invoice number for a meaningful filename.
-		$count    = (int) $order->get_meta( self::META_INVOICE_COUNT );
+		// We already know which slot the invoice occupies from the ownership check above.
 		$filename = 'invoice-' . $invoice_id . '.pdf';
-		for ( $n = 1; $n <= $count; $n++ ) {
-			if ( (int) $order->get_meta( self::META_INVOICE_PREFIX . $n . '_id' ) === $invoice_id ) {
-				$raw = $order->get_meta( self::META_INVOICE_PREFIX . $n . '_number' );
-				if ( $raw ) {
-					$filename = sanitize_file_name( $raw ) . '.pdf';
-				}
-				break;
-			}
+		$raw      = $order->get_meta( self::META_INVOICE_PREFIX . $n . '_number' );
+		if ( $raw ) {
+			$filename = sanitize_file_name( $raw ) . '.pdf';
 		}
 
 		header( 'Content-Type: application/pdf' );

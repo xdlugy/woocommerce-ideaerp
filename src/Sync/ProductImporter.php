@@ -61,6 +61,15 @@ class ProductImporter {
 			$representative = $variants[0];
 		$tmpl_id        = $representative->product_tmpl_id;
 
+		// One request returns every variant of this template fully hydrated
+		// (images, barcode, description_sale_html). Without this, sync_single_variation
+		// and resolve_* would fire one ERP call per variant.
+		$hydrated = $this->products_endpoint->get_by_tmpl_id( $tmpl_id );
+		$hydrated_by_id = [];
+		foreach ( $hydrated as $h ) {
+			$hydrated_by_id[ $h->id ] = $h;
+		}
+
 		// Find existing WC variable product by template ID meta.
 		$wc_id = $this->find_wc_product_id_by_tmpl( $tmpl_id );
 
@@ -163,12 +172,19 @@ class ProductImporter {
 
 			// Create/update one WC variation per ERP variant record.
 		foreach ( $variants as $variant ) {
-			$this->sync_single_variation( $saved_id, $variant, $all_attr_options, $taxonomy_map );
+			$hydrated_variant = $hydrated_by_id[ $variant->id ] ?? $variant;
+			$this->sync_single_variation( $saved_id, $hydrated_variant, $all_attr_options, $taxonomy_map );
 		}
 
-			// The list endpoint returns images:[] for all products.
-			// Fetch the full image list via a dedicated single-template request.
-		$images = $this->products_endpoint->get_images_by_tmpl_id( $tmpl_id );
+			// Reuse the same per-template hydration — walk variants for the first
+			// non-empty images array rather than firing a second API call.
+		$images = [];
+		foreach ( $hydrated as $h ) {
+			if ( ! empty( $h->images ) ) {
+				$images = $h->images;
+				break;
+			}
+		}
 		$this->handle_images( $saved_id, $images );
 
 			// Set WooCommerce default variation if the caller specified one.
@@ -357,9 +373,13 @@ class ProductImporter {
 		update_post_meta( $saved_id, self::ERP_ID_META, $variant->id );
 		$this->persist_global_unique_id_meta( $saved_id, $barcode );
 
-		$var_images = $this->products_endpoint->get_images_by_id( $variant->id );
+		// When $variant carries images (it does if it came from the hydrated template
+		// fetch), use them directly; otherwise fall back to a per-id request.
+		$var_images = ! empty( $variant->images )
+			? $variant->images
+			: $this->products_endpoint->get_images_by_id( $variant->id );
 		Logger::debug( sprintf(
-			'sync_single_variation: fetched %d image(s) for variation erp_id=%d',
+			'sync_single_variation: %d image(s) for variation erp_id=%d',
 			count( $var_images ),
 			$variant->id
 		) );
@@ -584,10 +604,13 @@ class ProductImporter {
 	 */
 	private function find_wc_product_id_by_tmpl( int $tmpl_id ): ?int {
 		$posts = get_posts( [
-			'post_type'      => 'product',
-			'posts_per_page' => 1,
-			'fields'         => 'ids',
-			'meta_query'     => [ [
+			'post_type'              => 'product',
+			'posts_per_page'         => 1,
+			'fields'                 => 'ids',
+			'no_found_rows'          => true,
+			'update_post_meta_cache' => false,
+			'update_post_term_cache' => false,
+			'meta_query'             => [ [
 				'key'   => self::ERP_TMPL_ID_META,
 				'value' => $tmpl_id,
 			] ],
@@ -601,10 +624,13 @@ class ProductImporter {
 	 */
 	private function find_variation_by_erp_id( int $erp_id ): ?int {
 		$posts = get_posts( [
-			'post_type'      => 'product_variation',
-			'posts_per_page' => 1,
-			'fields'         => 'ids',
-			'meta_query'     => [ [
+			'post_type'              => 'product_variation',
+			'posts_per_page'         => 1,
+			'fields'                 => 'ids',
+			'no_found_rows'          => true,
+			'update_post_meta_cache' => false,
+			'update_post_term_cache' => false,
+			'meta_query'             => [ [
 				'key'   => self::ERP_ID_META,
 				'value' => $erp_id,
 			] ],
@@ -745,6 +771,12 @@ class ProductImporter {
 			return $html;
 		}
 
+		// Avoid a redundant fetch when the hydrated template payload already
+		// filled description/description_sale — signals the field is genuinely empty.
+		if ( $erp->description !== null || $erp->description_sale !== null ) {
+			return '';
+		}
+
 		$fresh = $this->products_endpoint->get_by_id( $erp->id );
 		if ( $fresh ) {
 			$html = trim( (string) ( $fresh->description_sale_html ?? '' ) );
@@ -820,10 +852,13 @@ class ProductImporter {
 	private function find_wc_product_id( ErpProduct $erp ): ?int {
 		// First try by stored ERP ID meta.
 		$posts = get_posts( [
-			'post_type'      => [ 'product', 'product_variation' ],
-			'posts_per_page' => 1,
-			'fields'         => 'ids',
-			'meta_query'     => [ [
+			'post_type'              => [ 'product', 'product_variation' ],
+			'posts_per_page'         => 1,
+			'fields'                 => 'ids',
+			'no_found_rows'          => true,
+			'update_post_meta_cache' => false,
+			'update_post_term_cache' => false,
+			'meta_query'             => [ [
 				'key'   => self::ERP_ID_META,
 				'value' => $erp->id,
 			] ],
@@ -1006,10 +1041,13 @@ class ProductImporter {
 
 	private function find_attachment_by_source_url( string $url ): ?int {
 		$posts = get_posts( [
-			'post_type'      => 'attachment',
-			'posts_per_page' => 1,
-			'fields'         => 'ids',
-			'meta_query'     => [ [
+			'post_type'              => 'attachment',
+			'posts_per_page'         => 1,
+			'fields'                 => 'ids',
+			'no_found_rows'          => true,
+			'update_post_meta_cache' => false,
+			'update_post_term_cache' => false,
+			'meta_query'             => [ [
 				'key'   => '_wideaerp_source_url',
 				'value' => $url,
 			] ],

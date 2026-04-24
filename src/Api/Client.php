@@ -47,7 +47,7 @@ class Client {
 			'body'   => wp_json_encode( $body ),
 		] );
 
-		Logger::debug( sprintf( 'API POST %s | body: %s', $url, wp_json_encode( $body ) ) );
+		Logger::debug( sprintf( 'API POST %s | body: %s', $url, wp_json_encode( $this->redact_body( $body ) ) ) );
 
 		$response = wp_remote_post( $url, $args );
 
@@ -66,7 +66,7 @@ class Client {
 			'body'   => wp_json_encode( $body ),
 		] );
 
-		Logger::debug( sprintf( 'API PATCH %s | body: %s', $url, wp_json_encode( $body ) ) );
+		Logger::debug( sprintf( 'API PATCH %s | body: %s', $url, wp_json_encode( $this->redact_body( $body ) ) ) );
 
 		$response = wp_remote_request( $url, $args );
 
@@ -76,6 +76,39 @@ class Client {
 	// -------------------------------------------------------------------------
 	// Private helpers
 	// -------------------------------------------------------------------------
+
+	/**
+	 * Mask PII (customer name, email, phone, address, VAT, note) in request bodies
+	 * before they reach debug.log. Only structural keys used by this plugin's payloads
+	 * are touched; unknown keys are logged as-is.
+	 *
+	 * @param  array<string,mixed> $body
+	 * @return array<string,mixed>
+	 */
+	private function redact_body( array $body ): array {
+		$partner_keys = [ 'partner', 'partner_invoice', 'partner_shipping' ];
+		$sensitive    = [ 'name', 'company_name', 'email', 'phone', 'street', 'city', 'zip', 'vat' ];
+
+		foreach ( $partner_keys as $pk ) {
+			if ( isset( $body[ $pk ] ) && is_array( $body[ $pk ] ) ) {
+				foreach ( $sensitive as $sk ) {
+					if ( array_key_exists( $sk, $body[ $pk ] ) && $body[ $pk ][ $sk ] !== null ) {
+						$body[ $pk ][ $sk ] = '[redacted]';
+					}
+				}
+			}
+		}
+
+		if ( array_key_exists( 'integration_email', $body ) && $body['integration_email'] !== null ) {
+			$body['integration_email'] = '[redacted]';
+		}
+
+		if ( array_key_exists( 'note', $body ) && $body['note'] !== null ) {
+			$body['note'] = '[redacted]';
+		}
+
+		return $body;
+	}
 
 	/** @param array<string,mixed> $params */
 	private function build_url( string $path, array $params = [] ): string {
