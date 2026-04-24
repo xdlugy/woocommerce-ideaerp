@@ -404,7 +404,7 @@ class ProductImporter {
 			}
 
 			// When the ERP returns no attribute values for this variant, fall back
-			// to parsing Szerokość and Kolor from the product name.
+			// to parsing Rozmiar and Kolor from the product name.
 			if ( ! $contributed ) {
 				$parsed = $this->parse_attributes_from_name( $variant->name );
 				foreach ( $parsed as $attr_name => $values ) {
@@ -457,19 +457,19 @@ class ProductImporter {
 	}
 
 	/**
-	 * Parse Szerokość and Kolor attributes from a product name when the ERP
+	 * Parse Rozmiar and Kolor attributes from a product name when the ERP
 	 * returns no attributes for the product.
 	 *
 	 * Rules:
-	 *  - The last standalone integer in the name becomes Szerokość.
+	 *  - The last standalone integer in the name becomes Rozmiar.
 	 *  - Everything after that integer (trimmed) becomes Kolor.
 	 *  - If no integer is found, the text after the last title-case/all-caps
 	 *    word sequence is used as Kolor only.
 	 *
 	 * Examples:
-	 *  "TREND Szafka 60 czarny"          → Szerokość=60,  Kolor=czarny
-	 *  "Blat 100 dąb craft złoty"         → Szerokość=100, Kolor=dąb craft złoty
-	 *  "FLOW/MODERN Szafka 60 2D czarny"  → Szerokość=60,  Kolor=czarny  (last int)
+	 *  "TREND Szafka 60 czarny"          → Rozmiar=60,  Kolor=czarny
+	 *  "Blat 100 dąb craft złoty"         → Rozmiar=100, Kolor=dąb craft złoty
+	 *  "FLOW/MODERN Szafka 60 2D czarny"  → Rozmiar=60,  Kolor=czarny  (last int)
 	 *  "DIAMOND Komoda K154 dąb evoke"    → Kolor=dąb evoke  (K154 not standalone)
 	 *
 	 * @return array<string, string[]>  attribute_name => [value]
@@ -482,14 +482,14 @@ class ProductImporter {
 			$colour = trim( $m[2] );
 			if ( $colour !== '' ) {
 				Logger::debug( sprintf(
-					'parse_attributes_from_name: "%s" → Szerokość=%s, Kolor=%s',
+					'parse_attributes_from_name: "%s" → Rozmiar=%s, Kolor=%s',
 					$name,
 					$width,
 					$colour
 				) );
 				return [
-					'Szerokość' => [ $width ],
-					'Kolor'     => [ $colour ],
+					'Rozmiar' => [ $width ],
+					'Kolor'   => [ $colour ],
 				];
 			}
 		}
