@@ -75,10 +75,11 @@ class ProductImporter {
 
 		$action = $wc_product->get_id() ? 'updated' : 'created';
 
-			// Parent title: strip width/colour tail so the variable product reads
-			// e.g. "COMO Ława" not "COMO Ława 75 dąb artisan".
-			$parent_name = $this->variable_product_base_name( $representative->name );
-		$wc_product->set_name( $parent_name );
+		// Parent title: strip width/colour tail so the variable product reads
+		// e.g. "COMO Ława" not "COMO Ława 75 dąb artisan".
+		$parent_name = $this->variable_product_base_name( $representative->name );
+		$collection  = $this->extract_collection_name( $representative->name );
+	$wc_product->set_name( $parent_name );
 		$wc_product->set_status( 'draft' );
 			$wc_product->set_catalog_visibility( 'visible' );
 			$wc_product->set_weight( (string) $representative->weight );
@@ -128,14 +129,28 @@ class ProductImporter {
 			$wc_attributes[] = $attr;
 		}
 
-			if ( empty( $wc_attributes ) ) {
-				Logger::warning( sprintf(
-					'import_variable_from_variants: tmpl_id=%d has NO attributes — variants cannot be created without attributes. Check ERP data.',
-					$tmpl_id
-				) );
-			}
+		if ( empty( $wc_attributes ) ) {
+			Logger::warning( sprintf(
+				'import_variable_from_variants: tmpl_id=%d has NO attributes — variants cannot be created without attributes. Check ERP data.',
+				$tmpl_id
+			) );
+		}
 
-			$wc_product->set_attributes( $wc_attributes );
+		if ( $collection !== '' ) {
+			$kolekcja_taxonomy = $this->ensure_global_attribute( 'Kolekcja', [ $collection ] );
+			if ( $kolekcja_taxonomy ) {
+				$kolekcja_term = get_term_by( 'name', $collection, $kolekcja_taxonomy );
+				$kolekcja_attr = new \WC_Product_Attribute();
+				$kolekcja_attr->set_id( wc_attribute_taxonomy_id_by_name( 'Kolekcja' ) );
+				$kolekcja_attr->set_name( $kolekcja_taxonomy );
+				$kolekcja_attr->set_options( $kolekcja_term ? [ $kolekcja_term->term_id ] : [] );
+				$kolekcja_attr->set_visible( true );
+				$kolekcja_attr->set_variation( false );
+				$wc_attributes[] = $kolekcja_attr;
+			}
+		}
+
+		$wc_product->set_attributes( $wc_attributes );
 
 		$saved_id = $wc_product->save();
 
@@ -479,6 +494,19 @@ class ProductImporter {
 			$name
 		) );
 		return [];
+	}
+
+	/**
+	 * Return the first whitespace-delimited word of a product name (the collection/brand token).
+	 * Returns an empty string when the name is blank.
+	 */
+	private function extract_collection_name( string $name ): string {
+		$name = trim( $name );
+		if ( $name === '' ) {
+			return '';
+		}
+		$parts = preg_split( '/\s+/u', $name, 2 );
+		return $parts[0] ?? '';
 	}
 
 	/**
