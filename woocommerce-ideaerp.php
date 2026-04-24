@@ -103,6 +103,9 @@ final class WooCommerce_IdeaERP {
 
 		// Frontend: swap gallery images when a variation is selected.
 		( new \WooIdeaERP\Frontend\VariationGallery() )->register();
+
+		// Frontend: invoice download buttons on My Account → Orders.
+		( new \WooIdeaERP\Frontend\CustomerInvoices() )->register();
 	}
 
 	public function load_textdomain(): void {

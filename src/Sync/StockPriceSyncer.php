@@ -112,9 +112,19 @@ class StockPriceSyncer {
 			return;
 		}
 
+		$known = array_flip( $this->get_known_erp_ids() );
+
 		$data = [];
 		foreach ( $all as $p ) {
+			if ( ! array_key_exists( $p->id, $known ) ) {
+				continue;
+			}
 			$data[ $p->id ] = $p->available_qty();
+		}
+
+		if ( empty( $data ) ) {
+			Logger::debug( 'StockPriceSyncer: stock coordinator — no WC products with erp_id found, skipping.' );
+			return;
 		}
 
 		$interval = absint( get_option( self::OPT_STOCK_INTERVAL, 60 ) );
@@ -123,8 +133,9 @@ class StockPriceSyncer {
 		$this->dispatch_batches( self::ACTION_STOCK_BATCH, array_keys( $data ) );
 
 		Logger::info( sprintf(
-			'StockPriceSyncer: stock coordinator fetched %d ERP products, dispatched batches.',
-			count( $data )
+			'StockPriceSyncer: stock coordinator — %d of %d ERP products matched WC, dispatched batches.',
+			count( $data ),
+			count( $all )
 		) );
 	}
 
@@ -134,9 +145,19 @@ class StockPriceSyncer {
 			return;
 		}
 
+		$known = array_flip( $this->get_known_erp_ids() );
+
 		$data = [];
 		foreach ( $all as $p ) {
+			if ( ! array_key_exists( $p->id, $known ) ) {
+				continue;
+			}
 			$data[ $p->id ] = (float) $p->list_price;
+		}
+
+		if ( empty( $data ) ) {
+			Logger::debug( 'StockPriceSyncer: price coordinator — no WC products with erp_id found, skipping.' );
+			return;
 		}
 
 		$interval = absint( get_option( self::OPT_PRICE_INTERVAL, 60 ) );
@@ -145,8 +166,9 @@ class StockPriceSyncer {
 		$this->dispatch_batches( self::ACTION_PRICE_BATCH, array_keys( $data ) );
 
 		Logger::info( sprintf(
-			'StockPriceSyncer: price coordinator fetched %d ERP products, dispatched batches.',
-			count( $data )
+			'StockPriceSyncer: price coordinator — %d of %d ERP products matched WC, dispatched batches.',
+			count( $data ),
+			count( $all )
 		) );
 	}
 
@@ -295,6 +317,24 @@ class StockPriceSyncer {
 				'compare' => 'IN',
 			] ],
 		] );
+	}
+
+	/**
+	 * Return all ERP product IDs that are currently linked to a WC product or variation.
+	 *
+	 * @return int[]
+	 */
+	private function get_known_erp_ids(): array {
+		global $wpdb;
+
+		$meta_key = self::ERP_ID_META;
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery
+		$rows = $wpdb->get_col( $wpdb->prepare(
+			"SELECT DISTINCT meta_value FROM {$wpdb->postmeta} WHERE meta_key = %s AND meta_value != ''",
+			$meta_key
+		) );
+
+		return array_map( 'intval', $rows );
 	}
 
 	private function stock_interval_seconds(): int {
