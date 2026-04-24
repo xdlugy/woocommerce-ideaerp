@@ -98,6 +98,9 @@ final class WooCommerce_IdeaERP {
 		// Step 4: scheduled stock and price sync from IdeaERP to WooCommerce.
 		( new \WooIdeaERP\Sync\StockPriceSyncer() )->register_hooks();
 
+		// Admin: gallery input per variation on the product edit screen.
+		( new \WooIdeaERP\Admin\VariationGalleryAdmin() )->register();
+
 		// Frontend: swap gallery images when a variation is selected.
 		( new \WooIdeaERP\Frontend\VariationGallery() )->register();
 	}
