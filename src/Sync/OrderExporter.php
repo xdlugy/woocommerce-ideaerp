@@ -12,22 +12,21 @@ defined( 'ABSPATH' ) || exit;
 /**
  * Step 2 — Exports a WooCommerce order to IdeaERP as a sale order.
  *
- * Hooks into woocommerce_order_status_changed and fires when the order
- * reaches the configured trigger status (default: processing).
+ * Hooks into woocommerce_order_status_changed and runs synchronously when the
+ * order reaches the configured trigger status (default: processing). Outbound
+ * status updates (WC → ERP) are also synchronous. Inbound status pulls
+ * (ERP → WC) are handled by the scheduled OrderStatusImporter.
  *
  * Guard: skips silently when _erp_order_id meta is already set so that
  * re-triggering the same status change never double-pushes an order.
  */
 class OrderExporter {
 
-	private const META_ERP_ORDER_ID    = '_erp_order_id';
-	private const ASYNC_ACTION         = 'wideaerp_export_order';
-	private const STATUS_UPDATE_ACTION = 'wideaerp_update_order_status';
-	private const AS_GROUP             = 'woocommerce-ideaerp';
+	private const META_ERP_ORDER_ID = '_erp_order_id';
 
 	/**
 	 * Allow-list of IdeaERP order states accepted by PATCH /v2/orders/{id}.status.
-	 * Used both by SettingsPage (to render the dropdown) and run_async_status_update
+	 * Used both by SettingsPage (to render the dropdown) and handle_status_update
 	 * (defense against stale option values that no longer exist in the ERP).
 	 */
 	public const ERP_STATES = [
@@ -47,15 +46,11 @@ class OrderExporter {
 	public function register_hooks(): void {
 		add_action( 'woocommerce_order_status_changed', [ $this, 'handle' ], 10, 4 );
 		add_action( 'woocommerce_order_status_changed', [ $this, 'handle_status_update' ], 15, 4 );
-		add_action( self::ASYNC_ACTION, [ $this, 'run_async_export' ] );
-		add_action( self::STATUS_UPDATE_ACTION, [ $this, 'run_async_status_update' ], 10, 2 );
 	}
 
 	/**
 	 * Called by WooCommerce on every order status transition.
-	 *
-	 * Enqueues an async Action Scheduler job instead of hitting the ERP inline, so
-	 * bulk status changes don't fan out to N synchronous HTTP calls in one request.
+	 * Runs synchronously so the ERP order is created in the same request.
 	 *
 	 * @param int       $order_id   WC order ID.
 	 * @param string    $old_status Previous status slug (without "wc-" prefix).
@@ -74,37 +69,13 @@ class OrderExporter {
 			return;
 		}
 
-		if ( function_exists( 'as_enqueue_async_action' ) ) {
-			as_enqueue_async_action( self::ASYNC_ACTION, [ $order_id ], self::AS_GROUP );
-			return;
-		}
-
-		// Fallback when Action Scheduler is unavailable.
 		$this->export( $order );
 	}
 
 	/**
-	 * Async handler invoked by Action Scheduler.
-	 */
-	public function run_async_export( int $order_id ): void {
-		$order = wc_get_order( $order_id );
-		if ( ! $order instanceof \WC_Order ) {
-			Logger::debug( sprintf( 'OrderExporter: order #%d no longer exists, async export skipped.', $order_id ) );
-			return;
-		}
-
-		if ( $order->get_meta( self::META_ERP_ORDER_ID ) ) {
-			return;
-		}
-
-		$this->export( $order );
-	}
-
-	/**
-	 * Fires on every WC order status change at priority 15 (between export at 10 and
-	 * invoice fetch at 20). When the order has already been exported and the new WC
-	 * status has a non-empty mapping in wideaerp_order_status_map, dispatches an
-	 * async PATCH to update the ERP order's status field.
+	 * Fires on every WC order status change at priority 15 (after export at 10).
+	 * When the order has already been exported and the new WC status has a non-empty
+	 * mapping in wideaerp_order_status_map, PATCHes the ERP order synchronously.
 	 */
 	public function handle_status_update( int $order_id, string $old_status, string $new_status, \WC_Order $order ): void {
 		if ( ! $order->get_meta( self::META_ERP_ORDER_ID ) ) {
@@ -129,30 +100,7 @@ class OrderExporter {
 			return;
 		}
 
-		if ( function_exists( 'as_enqueue_async_action' ) ) {
-			as_enqueue_async_action( self::STATUS_UPDATE_ACTION, [ $order_id, $erp_state ], self::AS_GROUP );
-			return;
-		}
-
-		// Fallback when Action Scheduler is unavailable.
-		$this->update_status( $order, $erp_state );
-	}
-
-	/**
-	 * Async handler invoked by Action Scheduler.
-	 */
-	public function run_async_status_update( int $order_id, string $erp_state ): void {
-		$order = wc_get_order( $order_id );
-		if ( ! $order instanceof \WC_Order ) {
-			Logger::debug( sprintf( 'OrderExporter: order #%d no longer exists, async status update skipped.', $order_id ) );
-			return;
-		}
-
-		if ( ! $order->get_meta( self::META_ERP_ORDER_ID ) ) {
-			return;
-		}
-
-		// Defense against a stale option containing a value no longer in the allow-list.
+		// Defense against a stale option value no longer in the allow-list.
 		if ( ! in_array( $erp_state, self::ERP_STATES, true ) ) {
 			Logger::warning( sprintf(
 				'OrderExporter: refusing to PATCH WC order #%d with unknown ERP state "%s".',
