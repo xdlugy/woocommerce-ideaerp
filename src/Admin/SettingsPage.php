@@ -6,6 +6,8 @@ use WooIdeaERP\Api\Client;
 use WooIdeaERP\Api\Endpoints\CarriersEndpoint;
 use WooIdeaERP\Api\Endpoints\PaymentMethodsEndpoint;
 use WooIdeaERP\Api\Endpoints\PricelistsEndpoint;
+use WooIdeaERP\Sync\OrderExporter;
+use WooIdeaERP\Sync\OrderStatusImporter;
 use WooIdeaERP\Sync\StockPriceSyncer;
 
 defined( 'ABSPATH' ) || exit;
@@ -63,11 +65,16 @@ class SettingsPage {
 
 		// --- Orders tab ---
 		register_setting( 'wideaerp_orders_group', 'wideaerp_order_trigger_status', [ 'sanitize_callback' => 'sanitize_key', 'default' => 'processing' ] );
+		register_setting( 'wideaerp_orders_group', 'wideaerp_order_status_map', [ 'sanitize_callback' => [ $this, 'sanitize_order_status_map' ], 'default' => [] ] );
+		register_setting( 'wideaerp_orders_group', OrderStatusImporter::OPT_INTERVAL, [ 'sanitize_callback' => 'absint', 'default' => 60 ] );
 
 		add_settings_section( 'wideaerp_orders_section', __( 'Ustawienia eksportu zamówień', 'woocommerce-ideaerp' ), [ $this, 'orders_section_description' ], 'wideaerp_tab_orders' );
 
 		add_settings_field( 'wideaerp_order_trigger_status', __( 'Status wyzwalający eksport', 'woocommerce-ideaerp' ),
 			[ $this, 'field_order_trigger_status' ], 'wideaerp_tab_orders', 'wideaerp_orders_section' );
+
+		add_settings_field( OrderStatusImporter::OPT_INTERVAL, __( 'Interwał pobierania statusów z ERP (minuty)', 'woocommerce-ideaerp' ),
+			[ $this, 'field_order_status_sync_interval' ], 'wideaerp_tab_orders', 'wideaerp_orders_section' );
 
 		// --- Stock & Price Sync section (Orders tab) ---
 		register_setting( 'wideaerp_orders_group', StockPriceSyncer::OPT_STOCK_INTERVAL, [ 'sanitize_callback' => 'absint', 'default' => 60 ] );
@@ -178,6 +185,16 @@ class SettingsPage {
 		);
 	}
 
+	public function field_order_status_sync_interval(): void {
+		printf(
+			'<input type="number" id="%1$s" name="%1$s" value="%2$s" class="small-text" min="1" />
+			<p class="description">%3$s</p>',
+			esc_attr( OrderStatusImporter::OPT_INTERVAL ),
+			esc_attr( get_option( OrderStatusImporter::OPT_INTERVAL, 60 ) ),
+			esc_html__( 'Jak często pobierać statusy zamówień z IdeaERP i odzwierciedlać je w WooCommerce. Wymaga zmapowanych statusów powyżej (mapa jest odwracana). Domyślnie: 60.', 'woocommerce-ideaerp' )
+		);
+	}
+
 	public function field_order_trigger_status(): void {
 		$current  = get_option( 'wideaerp_order_trigger_status', 'processing' );
 		$statuses = wc_get_order_statuses();
@@ -195,6 +212,43 @@ class SettingsPage {
 		}
 		echo '</select>';
 		echo '<p class="description">' . esc_html__( 'Gdy zamówienie WooCommerce osiągnie ten status, zostanie przesłane do IdeaERP. Domyślnie: processing.', 'woocommerce-ideaerp' ) . '</p>';
+	}
+
+	/**
+	 * Sanitize the WC-status → ERP-state mapping submitted via the Orders tab form.
+	 * Drops unknown WC statuses and ERP states not in OrderExporter::ERP_STATES,
+	 * and strips empty mappings (treated as "no mapping").
+	 *
+	 * @param  mixed $raw
+	 * @return array<string, string>
+	 */
+	public function sanitize_order_status_map( $raw ): array {
+		if ( ! is_array( $raw ) ) {
+			return [];
+		}
+
+		$valid_wc  = array_map( fn( $slug ) => str_replace( 'wc-', '', $slug ), array_keys( wc_get_order_statuses() ) );
+		$valid_erp = OrderExporter::ERP_STATES;
+		$clean     = [];
+
+		foreach ( $raw as $wc_status => $erp_state ) {
+			$wc_status = sanitize_key( $wc_status );
+			$erp_state = sanitize_text_field( $erp_state );
+
+			if ( $erp_state === '' ) {
+				continue; // empty value = explicitly "no mapping"
+			}
+			if ( ! in_array( $wc_status, $valid_wc, true ) ) {
+				continue;
+			}
+			if ( ! in_array( $erp_state, $valid_erp, true ) ) {
+				continue;
+			}
+
+			$clean[ $wc_status ] = $erp_state;
+		}
+
+		return $clean;
 	}
 
 	// -------------------------------------------------------------------------
@@ -411,6 +465,7 @@ class SettingsPage {
 					<?php
 					settings_fields( 'wideaerp_orders_group' );
 					do_settings_sections( 'wideaerp_tab_orders' );
+					$this->render_order_status_mapping();
 					submit_button( __( 'Zapisz ustawienia', 'woocommerce-ideaerp' ) );
 						?>
 					</form>
@@ -421,6 +476,56 @@ class SettingsPage {
 				<?php endif; ?>
 			</div>
 		</div>
+		<?php
+	}
+
+	/**
+	 * Renders the WC-status → ERP-state mapping table inside the Orders tab form.
+	 * The select options come from OrderExporter::ERP_STATES (hardcoded — IdeaERP has
+	 * no list endpoint), so the table saves alongside the rest of the orders group
+	 * via the same options.php submit and needs no AJAX handler.
+	 */
+	private function render_order_status_mapping(): void {
+		$saved_map = (array) get_option( 'wideaerp_order_status_map', [] );
+		$wc_statuses = wc_get_order_statuses();
+		?>
+		<hr style="margin:30px 0;" />
+		<h2><?php esc_html_e( 'Mapowanie statusów zamówień', 'woocommerce-ideaerp' ); ?></h2>
+		<p>
+			<?php esc_html_e( 'Przypisz każdy status WooCommerce do statusu IdeaERP. Po wyeksportowaniu zamówienia każda zmiana statusu WooCommerce wyśle PATCH do IdeaERP, ustawiając zmapowany status. Statusy bez mapowania są pomijane.', 'woocommerce-ideaerp' ); ?>
+		</p>
+
+		<table class="widefat striped" style="max-width:700px;">
+			<thead>
+				<tr>
+					<th><?php esc_html_e( 'Status WooCommerce', 'woocommerce-ideaerp' ); ?></th>
+					<th><?php esc_html_e( 'Status IdeaERP', 'woocommerce-ideaerp' ); ?></th>
+				</tr>
+			</thead>
+			<tbody>
+				<?php foreach ( $wc_statuses as $slug => $label ) :
+					$wc_status = str_replace( 'wc-', '', $slug );
+					$selected  = (string) ( $saved_map[ $wc_status ] ?? '' );
+					?>
+					<tr>
+						<td>
+							<strong><?php echo esc_html( $label ); ?></strong>
+							<br /><code><?php echo esc_html( $wc_status ); ?></code>
+						</td>
+						<td>
+							<select name="wideaerp_order_status_map[<?php echo esc_attr( $wc_status ); ?>]" style="min-width:220px;">
+								<option value=""><?php esc_html_e( '— nie mapowane —', 'woocommerce-ideaerp' ); ?></option>
+								<?php foreach ( OrderExporter::ERP_STATES as $erp_state ) : ?>
+									<option value="<?php echo esc_attr( $erp_state ); ?>" <?php selected( $selected, $erp_state ); ?>>
+										<?php echo esc_html( $erp_state ); ?>
+									</option>
+								<?php endforeach; ?>
+							</select>
+						</td>
+					</tr>
+				<?php endforeach; ?>
+			</tbody>
+		</table>
 		<?php
 	}
 

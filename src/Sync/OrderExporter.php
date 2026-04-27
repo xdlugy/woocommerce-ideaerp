@@ -20,13 +20,35 @@ defined( 'ABSPATH' ) || exit;
  */
 class OrderExporter {
 
-	private const META_ERP_ORDER_ID = '_erp_order_id';
-	private const ASYNC_ACTION      = 'wideaerp_export_order';
-	private const AS_GROUP          = 'woocommerce-ideaerp';
+	private const META_ERP_ORDER_ID    = '_erp_order_id';
+	private const ASYNC_ACTION         = 'wideaerp_export_order';
+	private const STATUS_UPDATE_ACTION = 'wideaerp_update_order_status';
+	private const AS_GROUP             = 'woocommerce-ideaerp';
+
+	/**
+	 * Allow-list of IdeaERP order states accepted by PATCH /v2/orders/{id}.status.
+	 * Used both by SettingsPage (to render the dropdown) and run_async_status_update
+	 * (defense against stale option values that no longer exist in the ERP).
+	 */
+	public const ERP_STATES = [
+		'cancel',
+		'draft',
+		'sent',
+		'sale',
+		'to_pickup',
+		'to_collect',
+		'to_pack',
+		'sent_to_warehouse',
+		'done',
+		'order_sent',
+		'delivered',
+	];
 
 	public function register_hooks(): void {
 		add_action( 'woocommerce_order_status_changed', [ $this, 'handle' ], 10, 4 );
+		add_action( 'woocommerce_order_status_changed', [ $this, 'handle_status_update' ], 15, 4 );
 		add_action( self::ASYNC_ACTION, [ $this, 'run_async_export' ] );
+		add_action( self::STATUS_UPDATE_ACTION, [ $this, 'run_async_status_update' ], 10, 2 );
 	}
 
 	/**
@@ -76,6 +98,123 @@ class OrderExporter {
 		}
 
 		$this->export( $order );
+	}
+
+	/**
+	 * Fires on every WC order status change at priority 15 (between export at 10 and
+	 * invoice fetch at 20). When the order has already been exported and the new WC
+	 * status has a non-empty mapping in wideaerp_order_status_map, dispatches an
+	 * async PATCH to update the ERP order's status field.
+	 */
+	public function handle_status_update( int $order_id, string $old_status, string $new_status, \WC_Order $order ): void {
+		if ( ! $order->get_meta( self::META_ERP_ORDER_ID ) ) {
+			return;
+		}
+
+		// When OrderStatusImporter is applying an inbound status pulled from the ERP,
+		// suppress the outbound PATCH so we don't echo it straight back.
+		if ( $order->get_meta( '_wideaerp_inbound_status_sync' ) ) {
+			return;
+		}
+
+		$map       = (array) get_option( 'wideaerp_order_status_map', [] );
+		$erp_state = isset( $map[ $new_status ] ) ? (string) $map[ $new_status ] : '';
+
+		if ( $erp_state === '' ) {
+			Logger::debug( sprintf(
+				'OrderExporter: WC order #%d status "%s" has no ERP mapping, skipping update.',
+				$order_id,
+				$new_status
+			) );
+			return;
+		}
+
+		if ( function_exists( 'as_enqueue_async_action' ) ) {
+			as_enqueue_async_action( self::STATUS_UPDATE_ACTION, [ $order_id, $erp_state ], self::AS_GROUP );
+			return;
+		}
+
+		// Fallback when Action Scheduler is unavailable.
+		$this->update_status( $order, $erp_state );
+	}
+
+	/**
+	 * Async handler invoked by Action Scheduler.
+	 */
+	public function run_async_status_update( int $order_id, string $erp_state ): void {
+		$order = wc_get_order( $order_id );
+		if ( ! $order instanceof \WC_Order ) {
+			Logger::debug( sprintf( 'OrderExporter: order #%d no longer exists, async status update skipped.', $order_id ) );
+			return;
+		}
+
+		if ( ! $order->get_meta( self::META_ERP_ORDER_ID ) ) {
+			return;
+		}
+
+		// Defense against a stale option containing a value no longer in the allow-list.
+		if ( ! in_array( $erp_state, self::ERP_STATES, true ) ) {
+			Logger::warning( sprintf(
+				'OrderExporter: refusing to PATCH WC order #%d with unknown ERP state "%s".',
+				$order_id,
+				$erp_state
+			) );
+			return;
+		}
+
+		$this->update_status( $order, $erp_state );
+	}
+
+	/**
+	 * PATCH the ERP sale order with a new status value.
+	 */
+	public function update_status( \WC_Order $order, string $erp_state ): void {
+		$url   = get_option( 'wideaerp_erp_url', '' );
+		$token = get_option( 'wideaerp_api_token', '' );
+
+		if ( ! $url || ! $token ) {
+			Logger::error( 'OrderExporter: ERP URL or API token not configured for status update.' );
+			$order->add_order_note( __( 'IdeaERP: status update skipped — ERP URL or API token not configured.', 'woocommerce-ideaerp' ) );
+			return;
+		}
+
+		$erp_order_id = (int) $order->get_meta( self::META_ERP_ORDER_ID );
+
+		try {
+			$endpoint = new OrdersEndpoint( new Client( $url, $token ) );
+			$endpoint->update( $erp_order_id, [ 'status' => $erp_state ] );
+
+			$order->add_order_note(
+				sprintf(
+					/* translators: %s: ERP order state */
+					__( 'IdeaERP: status updated to %s.', 'woocommerce-ideaerp' ),
+					$erp_state
+				)
+			);
+
+			Logger::info( sprintf(
+				'OrderExporter: WC order #%d → ERP order #%d status set to "%s".',
+				$order->get_id(),
+				$erp_order_id,
+				$erp_state
+			) );
+
+		} catch ( \RuntimeException $e ) {
+			Logger::error( sprintf(
+				'OrderExporter: failed to update ERP order #%d status for WC order #%d — %s',
+				$erp_order_id,
+				$order->get_id(),
+				$e->getMessage()
+			) );
+			$order->add_order_note(
+				sprintf(
+					/* translators: 1: ERP state, 2: error message */
+					__( 'IdeaERP: status update to %1$s failed — %2$s', 'woocommerce-ideaerp' ),
+					$erp_state,
+					$e->getMessage()
+				)
+			);
+		}
 	}
 
 	/**
