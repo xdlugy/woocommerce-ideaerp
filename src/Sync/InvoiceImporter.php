@@ -51,9 +51,6 @@ class InvoiceImporter {
 		// Register the scheduled action handler.
 		add_action( self::SCHEDULED_ACTION, [ $this, 'run_scheduled_check' ] );
 
-		// Async per-order fetch triggered from handle_status_changed.
-		add_action( 'wideaerp_fetch_invoice_for_order', [ $this, 'run_async_fetch' ] );
-
 		// Schedule the recurring job on init (idempotent — only schedules if not already queued).
 		add_action( 'init', [ $this, 'schedule_recurring_check' ] );
 
@@ -103,26 +100,6 @@ class InvoiceImporter {
 	 */
 	public function handle_status_changed( int $order_id, string $old_status, string $new_status, \WC_Order $order ): void {
 		if ( ! $order->get_meta( self::META_ERP_ORDER_ID ) ) {
-			return;
-		}
-
-		if ( ! $this->is_invoice_pending( $order ) ) {
-			return;
-		}
-
-		// Defer the ERP roundtrip — bulk status changes would otherwise fire N
-		// synchronous HTTP calls in one admin request.
-		if ( function_exists( 'as_enqueue_async_action' ) ) {
-			as_enqueue_async_action( 'wideaerp_fetch_invoice_for_order', [ $order_id ], 'woocommerce-ideaerp' );
-			return;
-		}
-
-		$this->import_for_order( $order );
-	}
-
-	public function run_async_fetch( int $order_id ): void {
-		$order = wc_get_order( $order_id );
-		if ( ! $order instanceof \WC_Order ) {
 			return;
 		}
 
