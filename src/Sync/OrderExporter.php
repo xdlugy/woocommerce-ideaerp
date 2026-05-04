@@ -503,10 +503,22 @@ class OrderExporter {
 			return 0.0;
 		}
 
+		// Read the nominal rate directly from WC's tax rate table. Back-calculating
+		// (tax/net)*100 from stored totals causes floating-point drift on deeply
+		// discounted items (e.g. a 99% coupon leaves tiny rounded amounts whose
+		// division yields 23.05 instead of 23).
+		$rate_ids = array_keys( ! empty( $taxes['total'] ) ? $taxes['total'] : $taxes['subtotal'] );
+		foreach ( $rate_ids as $rate_id ) {
+			$rate_row = \WC_Tax::get_rate( (int) $rate_id );
+			if ( $rate_row && isset( $rate_row->tax_rate ) ) {
+				return (float) $rate_row->tax_rate;
+			}
+		}
+
+		// Fallback for rates that no longer exist in the table.
 		$net = (float) $item->get_total();
 		$tax = (float) $item->get_total_tax();
 
-		// Fall back to pre-discount figures when total is zero.
 		if ( $net <= 0 ) {
 			$net = (float) $item->get_subtotal();
 			$tax = (float) $item->get_subtotal_tax();
