@@ -425,6 +425,15 @@ class OrderExporter {
 	private function build_order_lines( \WC_Order $order ): array {
 		$lines = [];
 
+		// Build rate_id → percent map from the order's tax line items once.
+		// WC_Order_Item_Tax::get_rate_percent() returns the stored nominal rate
+		// (e.g. 23), avoiding floating-point drift from back-calculating via totals.
+		$tax_rate_map = [];
+		foreach ( $order->get_items( 'tax' ) as $tax_item ) {
+			/** @var \WC_Order_Item_Tax $tax_item */
+			$tax_rate_map[ $tax_item->get_rate_id() ] = (float) $tax_item->get_rate_percent();
+		}
+
 		foreach ( $order->get_items() as $item ) {
 			/** @var \WC_Order_Item_Product $item */
 			$product = $item->get_product();
@@ -462,7 +471,7 @@ class OrderExporter {
 				$discount = round( ( ( $subtotal_gross - $total_gross ) / $subtotal_gross ) * 100, 2 );
 			}
 
-			$tax_rate = $this->get_item_tax_rate( $item );
+			$tax_rate = $this->get_item_tax_rate( $item, $tax_rate_map );
 
 			$line = [
 				'product'         => $product_field,
@@ -496,26 +505,27 @@ class OrderExporter {
 	 * when the total is zero (e.g. 100 % coupon). Returns 0.0 when no tax data
 	 * is available.
 	 */
-	private function get_item_tax_rate( \WC_Order_Item_Product $item ): float {
+	/**
+	 * @param array<int|string,float> $tax_rate_map rate_id → percent, pre-built from the order's tax items
+	 */
+	private function get_item_tax_rate( \WC_Order_Item_Product $item, array $tax_rate_map ): float {
 		$taxes = $item->get_taxes();
 
 		if ( empty( $taxes['total'] ) && empty( $taxes['subtotal'] ) ) {
 			return 0.0;
 		}
 
-		// Read the nominal rate directly from WC's tax rate table. Back-calculating
-		// (tax/net)*100 from stored totals causes floating-point drift on deeply
-		// discounted items (e.g. a 99% coupon leaves tiny rounded amounts whose
-		// division yields 23.05 instead of 23).
+		// Prefer the nominal rate stored on the order's tax line items. Back-calculating
+		// (tax/net)*100 from stored totals drifts on heavily discounted items
+		// (e.g. 99% coupon yields 23.05 instead of 23).
 		$rate_ids = array_keys( ! empty( $taxes['total'] ) ? $taxes['total'] : $taxes['subtotal'] );
 		foreach ( $rate_ids as $rate_id ) {
-			$rate_row = \WC_Tax::get_rate( (int) $rate_id );
-			if ( $rate_row && isset( $rate_row->tax_rate ) ) {
-				return (float) $rate_row->tax_rate;
+			if ( isset( $tax_rate_map[ $rate_id ] ) ) {
+				return $tax_rate_map[ $rate_id ];
 			}
 		}
 
-		// Fallback for rates that no longer exist in the table.
+		// Fallback: derive from stored totals when the rate ID is not in the map.
 		$net = (float) $item->get_total();
 		$tax = (float) $item->get_total_tax();
 
