@@ -453,17 +453,18 @@ class OrderExporter {
 
 			$qty = (float) $item->get_quantity();
 
-			// WC stores line totals as net (excl. tax). Add tax back to get the
-			// gross amount and send price_include: true so IdeaERP stores the
-			// same gross price the customer saw.
-			$total_net   = (float) $item->get_total();
-			$total_tax   = (float) $item->get_total_tax();
-			$total_gross = $total_net + $total_tax;
-			$price_unit  = $total_gross / max( 1.0, $qty );
-
+			// Use the pre-discount subtotal as price_unit so the ERP receives the
+			// original unit price. The discount field carries the coupon percentage.
+			// Sending the post-discount price AND a discount causes the ERP to
+			// apply the coupon a second time.
 			$subtotal_net   = (float) $item->get_subtotal();
 			$subtotal_tax   = (float) $item->get_subtotal_tax();
 			$subtotal_gross = $subtotal_net + $subtotal_tax;
+			$price_unit     = $subtotal_gross / max( 1.0, $qty );
+
+			$total_net   = (float) $item->get_total();
+			$total_tax   = (float) $item->get_total_tax();
+			$total_gross = $total_net + $total_tax;
 
 			// Express any coupon discount as a percentage of the pre-discount gross price.
 			$discount = 0.0;
